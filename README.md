@@ -68,6 +68,7 @@ PowerShell /powershell /PowerShell  id:XXXXXXXXXXXXXXXXXXXX
 ## To-do
 
 - [ ] New module name
+- [ ] Add upload & downloda cmdlets
 - [ ] Implement better error output
 - [ ] Implement better token management / storage
 - [ ] Add "continue" cmdlets for organisations with more possible results than API limits allow
