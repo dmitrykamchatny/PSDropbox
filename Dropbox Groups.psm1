@@ -6,12 +6,12 @@
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-create.
 .EXAMPLE
-   New-DropboxGroup -GroupName PowerShell -GroupExternalId PowerShell -GroupManagementType user_managed -Token <access token>
+   PS> New-DropboxGroup -GroupName PowerShell -GroupExternalId PowerShell -GroupManagementType user_managed -Token <TeamMemberManagement>
 
    Creates a new group named PowerShell where group membership is managed by a group manager user.
 #>
 function New-DropboxGroup {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
     Param(
         # New Dropbox group name.
         [parameter(Mandatory=$true)]
@@ -37,16 +37,17 @@ function New-DropboxGroup {
             group_management_type=$GroupManagementType
         }
             
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupExternalId: $GroupExternalId, ManagementType: $GroupManagementType","Create new Dropbox group")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
-    End{
-    }
+    End{}
 }
 
 <#
@@ -59,15 +60,15 @@ function New-DropboxGroup {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-delete.
 .EXAMPLE
-   Remove-DropboxGroup -GroupName PowerShell -Token <access token>
+   PS> Remove-DropboxGroup -GroupName PowerShell -Token <TeamMemberManagement>
 
    Remove Dropbox group PowerShell.
 .EXAMPLE
-   Remove-DropboxGroup -GroupId <Group Id> -Token <access token>
+   PS> Remove-DropboxGroup -GroupId <Group Id> -Token <TeamMemberManagement>
 
    Remove Dropbox group by specifying the group_id.
 .EXAMPLE
-   Remove-DropboxGroup -GroupExternalId PowerShell -Token <access token>
+   PS> Remove-DropboxGroup -GroupExternalId PowerShell -Token <TeamMemberManagement>
 
    Remove Dropbox group by specifying group_external_id.
 #>
@@ -105,16 +106,17 @@ function Remove-DropboxGroup {
             $Body=@{".tag"="group_id";group_id=$Id}
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupId: $GroupId, GroupExternalId: $GroupExternalId","Delete Dropbox group")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
-    End{
-    }
+    End{}
 }
 
 <#
@@ -125,15 +127,15 @@ function Remove-DropboxGroup {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-get_info.
 .EXAMPLE
-   Get-DropboxGroupInfo -GroupName *PowerShell* -Token <access token>
+   PS> Get-DropboxGroupInfo -GroupName *PowerShell* -Token <access token>
 
    Get info for any Dropbox group with a name containing PowerShell.
 .EXAMPLE
-   Get-DropboxGroupInfo -GroupName PowerShell,Scripts -Token <access token>
+   PS> Get-DropboxGroupInfo -GroupName PowerShell,Scripts -Token <access token>
 
    Get info for Dropbox groups "PowerShell" & "Scripts"
 .EXAMPLE
-   Get-DropboxGroupInfo -GroupId <Group Id> -Token <access token>
+   PS> Get-DropboxGroupInfo -GroupId <Group Id> -Token <access token>
 
    Get info for Dropbox group of the specified group_id.
 #>
@@ -208,15 +210,15 @@ function Get-DropboxGroupInfo {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-list"
 .EXAMPLE
-   Get-DropboxGroupList
+   PS> Get-DropboxGroupList
 
    Cmdlet will list all groups.
 .EXAMPLE
-   Get-DropboxGroupList -GroupName PowerShell
+   PS> Get-DropboxGroupList -GroupName PowerShell
 
    Cmdlet willl return group_id for group PowerShell (if exists).
 .EXAMPLE
-   Get-DropboxGroupList -GroupName *test*
+   PS> Get-DropboxGroupList -GroupName *test*
 
    Cmdlet will return group_ids for any group containing "test".
 #>
@@ -274,16 +276,16 @@ function Get-DropboxGroupList {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-members-add.
 .EXAMPLE
-   Add-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com,cmdlet@example.com -AccessType member
+   PS> Add-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com,cmdlet@example.com -AccessType member -Token <TeamMemberManagement>
 
    Add powershell@example.com & cmdlet@example.com to PowerShell group as members.
 .EXAMPLE
-   Add-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com -AccessType owner -ReturnMembers
+   PS> Add-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com -AccessType owner -ReturnMembers -Token <TeamMemberManagement>
 
    Add powershell@example.com to PowerShell group as the owner and return all current group members.
 #>
 function Add-DropboxGroupMember {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
     Param(
         # Dropbox group name used to resolve group id
         [parameter(Mandatory,ParameterSetName="GroupName")]
@@ -347,15 +349,17 @@ function Add-DropboxGroupMember {
             return_members=$ReturnMembers.IsPresent
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body -Depth 3)     
-            Write-Output $Result.group_info
-            if ($ReturnMembers.IsPresent -eq $true) {
-                Write-Output $Result.group_info.members.profile | Sort-Object email
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupID: $GroupId, GroupExternalId: $GroupExternalId","Add members to")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body -Depth 3)     
+                Write-Output $Result.group_info
+                if ($ReturnMembers.IsPresent -eq $true) {
+                    Write-Output $Result.group_info.members.profile | Sort-Object email
+                }
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
             }
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
         }
 
     }
@@ -368,7 +372,7 @@ function Add-DropboxGroupMember {
 .DESCRIPTION
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-members-list.
 .EXAMPLE
-   Get-DropboxGroupMemberList -GroupName PowerShell
+   Get-DropboxGroupMemberList -GroupName PowerShell -Token <TeamInformation>
 
    Get list of members for group PowerShell
 #>
@@ -439,16 +443,16 @@ function Get-DropboxGroupMemberList {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-members-remove.
 .EXAMPLE
-   Remove-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com
+   PS> Remove-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com -Token <TeamMemberManagement>
 
    Remove member powershell@example.com from group PowerShell.
 .EXAMPLE
-   Remove-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com,cmdlet@example.com -ReturnMembers
+   PS> Remove-DropboxGroupMember -GroupName PowerShell -MemberEmail powershell@example.com,cmdlet@example.com -ReturnMembers -Token <TeamMemberManagement>
 
    Remove member powershell@example.com & cmdlet@example.com from group PowerShell and return list of current members.
 #>
 function Remove-DropboxGroupMember {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # Dropbox group name used to resolve group id
         [parameter(Mandatory,ParameterSetName="GroupName")]
@@ -507,15 +511,17 @@ function Remove-DropboxGroupMember {
             return_members=$ReturnMembers.IsPresent
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result.group_info
-            if ($ReturnMembers.IsPresent -eq $true) {
-                Write-Output $Result.group_info.members.profile | Sort-Object email
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupId: $GroupId, GroupExternalId: $GroupExternalId","Remove Dropbox member")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result.group_info
+                if ($ReturnMembers.IsPresent -eq $true) {
+                    Write-Output $Result.group_info.members.profile | Sort-Object email
+                }
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError 
             }
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError 
         }
     }
     End{}
@@ -527,14 +533,14 @@ function Remove-DropboxGroupMember {
 .DESCRIPTION
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-members-set_access_type.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Set-DrobpoxGroupMemberAccess -GroupName PowerShell -MemberEmail ps -AccessType owner -Token <TeamMemberManagement>
+
+   Sets user ps as the owner of group PowerShell.
 #>
 function Set-DropboxGroupMemberAccess {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
-        # Dropbox group name used to resolve group id
+        # Dropbox group name used to resolve group id.
         [parameter(Mandatory,ParameterSetName="GroupName")]
         [string]$GroupName,
         # Dropbox group id
@@ -551,11 +557,11 @@ function Set-DropboxGroupMemberAccess {
         # Dropbox team member's external_id.
         [ValidateLength(1,64)]
         [string]$ExternalId,
-        # New group access type the user will have
+        # New group access type the user will have.
         [parameter(Mandatory)]
         [validateset("member","owner")]
         [string]$AccessType,
-        # Whether to return the list of members in the group
+        # Whether to return the list of members in the group.
         [switch]$ReturnMembers,
         # Dropbox API access token.
         [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
@@ -595,16 +601,17 @@ function Set-DropboxGroupMemberAccess {
             return_members=$ReturnMembers.IsPresent
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError 
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupId: $GroupId, GroupExternalId: $GroupExternalId","Set member to $AccessType")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError 
+            }
         }
     }
-    End{
-    }
+    End{}
 }
 
 <#
@@ -615,12 +622,12 @@ function Set-DropboxGroupMemberAccess {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-groups-update.
 .EXAMPLE
-   Update-DropboxGroup -GroupName PowerShell -NewName PowerShellUpdated
+   PS> Update-DropboxGroup -GroupName PowerShell -NewName PowerShellUpdated -Token <TeamMemberManagement>
 
    Update group PowerShell name to PowerShellUpdated.
 #>
 function Update-DropboxGroup {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # Group name to resolve group id
         # Dropbox group name used to resolve group id
@@ -680,17 +687,18 @@ function Update-DropboxGroup {
             $Body.Add("new_group_management_type",$NewGroupManagementType) | Out-Null
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-            if ($ReturnMembers.IsPresent -eq $true) {
-                Write-Output $Result.members.profile | Sort-Object email
+        if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupID: $GroupId, GroupExternalId: $GroupExternalId","NewName: $NewName, NewExternalId: $NewExternalID, ManagementType: $NewGroupManagementType")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+                if ($ReturnMembers.IsPresent -eq $true) {
+                    Write-Output $Result.members.profile | Sort-Object email
+                }
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError 
             }
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError 
         }
     }
-    End{
-    }
+    End{}
 }

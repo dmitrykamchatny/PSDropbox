@@ -2,14 +2,20 @@
 .Synopsis
    Sets an archived team folder's status to active.
 .DESCRIPTION
+    Sets an archived team folder's status to active.
+
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-activate.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Enable-DropboxTeamFolder -TeamFolderName PowerShell -Token <TeamMemberFileAccess>
+
+   Cmdlet resolves team folder name PowerShell and sets folder status from archived to active.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Enable-DropboxTeamFolder -TeamfolderId id:12323125235 -Token <TeamMemberFileAccess>
+
+   Cmdlet sets folder status from archived to active.
 #>
 function Enable-DropboxTeamFolder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # The ID of the team folder.
         [parameter(Mandatory,ParameterSetName="TeamFolderId")]
@@ -29,23 +35,27 @@ function Enable-DropboxTeamFolder {
     Process{
         
         if ($TeamFolderName) {
-            $TeamFolderId = Get-DropboxTeamFolderList -TeamFolderName $TeamFolderName -Token $Token
+            $Id = Get-DropboxTeamFolderList -TeamFolderName $TeamFolderName -Token $Token
+            if ($Id -ne $null) {
+                $TeamFolderId = $Id
+            }
         }
         
         $Body = @{
             team_folder_id=$TeamFolderId
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("TeamFolderName: $TeamFolderName, TeamFolderId: $TeamFolderId","Actiate")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
-    End{
-    }
+    End{}
 }
 
 <#
@@ -56,12 +66,16 @@ function Enable-DropboxTeamFolder {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-archive.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Archive-DropboxTeamFolder -TeamFolderName PowerShell -Token <TeamMemberFileAccess>
+
+   Cmdlet resolves team folder name PowerShell and sets folders status to archived.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Archive-DropboxTeamFolder -TeamFolderId id:1231231251 -Token <TeamMemberFileAcces>
+
+   Cmdlet sets folder status to archived.
 #>
 function Archive-DropboxTeamFolder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
     Param(
         # The ID of the team folder.
         [parameter(Mandatory,ParameterSetName="TeamFolderId")]
@@ -82,18 +96,24 @@ function Archive-DropboxTeamFolder {
     }
     Process{
         if ($TeamFolderName) {
-            $TeamFolderId = Get-DropboxTeamFolderList -TeamFolderName $TeamFolderName -Token $Token
+            $Id = Get-DropboxTeamFolderList -TeamFolderName $TeamFolderName -Token $Token
+            if ($Id -ne $null) {
+                $TeamFolderId = $Id
+            }
         }
+
         $Body = @{
             team_folder_id=$TeamFolderId
             force_async_off=$ForceAsync.IsPresent
         }
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("TeamFolderName: $TeamFolderName, TeamFolderId: $TeamFolderId","Archive")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{}
@@ -107,16 +127,16 @@ function Archive-DropboxTeamFolder {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-create.
 .EXAMPLE
-   New-DropboxTeamFolder -Name PowerShell
+   PS> New-DropboxTeamFolder -Name PowerShell -Token <TeamMemberFileAccess>
 
    Creates new team folder with the name "PowerShell"
 .EXAMPLE
-   New-DropboxTeamFolder -Name PowerShell -SyncSetting not_synced
+   PS> New-DropboxTeamFolder -Name PowerShell -SyncSetting not_synced -Token <TeamMemberFileAccess>
 
    Creates new team folder with the name "PowerShell" and sets team folder sync setting to not synced.
 #>
 function New-DropboxTeamFolder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
     Param(
         # Name for the new team folder
         [parameter(Mandatory)]
@@ -145,16 +165,18 @@ function New-DropboxTeamFolder {
         if ($SyncSetting) {
             $Body.Add("sync_setting",$SyncSetting)
         }
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            $DropboxError = Get-DropboxError -Result $ResultError
+        
+        if ($PSCmdlet.ShouldProcess("$Name","Create new Dropbox team folder")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                $DropboxError = Get-DropboxError -Result $ResultError
+            }
         }
     }
-    End{
-    }
+    End{}
 }
 
 <#
@@ -163,11 +185,13 @@ function New-DropboxTeamFolder {
 .DESCRIPTION
    Retrieves metadata for team folders.
 
+   TeamFolderIds and TeamFolderNames can be specified at the same time. Team folder names will be used to resolve associated team_folder_ids, wildcards can be used to get all similar named folders.
+
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-get_info.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Get-DropboxTeamfolderInfo -TeamFolderName *PowerShell* -Token <TeamMemberFileAcces>
+
+   Get Dropbox team folder metadata for any folder named like PowerShell.
 #>
 function Get-DropboxTeamFolderInfo {
     [CmdletBinding()]
@@ -193,7 +217,7 @@ function Get-DropboxTeamFolderInfo {
         }
 
         foreach ($Team in $TeamFolderName) {
-            $TeamFolderList | Where-Object name -Like "*$Team*" | foreach {
+            $TeamFolderList | Where-Object name -Like "$Team" | foreach {
                     $TeamFolders.Add($_.team_folder_id) | Out-Null
             }
         }
@@ -221,9 +245,13 @@ function Get-DropboxTeamFolderInfo {
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-list.
 .EXAMPLE
-   Get-DropboxTeamFolderList -Limit 200
+   PS> Get-DropboxTeamFolderList -Token <TeamMemberFileAccess>
 
-   Get list of all team folders up to 200 results.
+   Get list of team folders up to 200 entries (default).
+.EXAMPLE
+   PS> Get-DropboxTeamfolderList -Limit 1000 -Token <TeamMemberFileAccess>
+
+   Get list of team folders up to 1000 entries (maximum).
 #>
 function Get-DropboxTeamFolderList {
     [CmdletBinding()]
@@ -231,7 +259,7 @@ function Get-DropboxTeamFolderList {
         # Team folder name to resolve team_folder_id.
         [string]$TeamFolderName,
         # Maximum number of results to return per request.
-        [ValidateRange(1,200)]
+        [ValidateRange(1,1000)]
         [int]$Limit=200,
         # Dropbox API access token.
         [parameter(Mandatory,HelpMessage="Enter TeamMemberFileAccess access token")]
@@ -272,10 +300,12 @@ function Get-DropboxTeamFolderList {
    Delete team folder.
 .DESCRIPTION
    Permanently deletes an archived team folder.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-permanently_delete.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Remove-DropboxTeamFolder -TeamFolderName PowerShell -Token <TeamMemberFileAccess>
+
+   Permanently removes team folder PowerShell if folder status is currently archived.
 #>
 function Remove-DropboxTeamFolder {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
@@ -328,9 +358,9 @@ function Remove-DropboxTeamFolder {
 .DESCRIPTION
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-team_folder-rename
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Rename-DropboxTeamFolder -TeamFolderName PowerShell -NewName POSH -Token <TeamMemberFileAccess>
+
+   Cmdlet renames team folder PowerShell to POSH
 #>
 function Rename-DropboxTeamFolder {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
@@ -351,7 +381,6 @@ function Rename-DropboxTeamFolder {
 
     Begin{
         $URI='https://api.dropboxapi.com/2/team/team_folder/rename'
-        $TeamFolderID = (Get-DropboxTeamFolderList | Where-Object name -like "*$TeamFolderName").team_folder_id
         $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{

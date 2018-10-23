@@ -2,20 +2,22 @@
 .SYNOPSIS
     Copy a file or folder.
 .DESCRIPTION
-    Copy a file or folder to a different location in user's Dropbox. If the source path is a folder all its contents will be copied.
+    Copy a file or folder to a different location in user's Dropbox. If the source path is a folder, all its contents will be copied.
+
+    Dropbox Business users are able to run this command on user's behalf using the SelectUser parameter and providing Team Member File Access permission access token.
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-copy.
 .EXAMPLE
-    Copy-DropboxFile -Source /test.txt -Destination /PowerShell/test.txt -token <access token>
+    PS> Copy-DropboxFile -Source /test.txt -Destination /PowerShell/test.txt -token <access token>
 
     Copies file test.txt to PowerShell folder.
 .EXAMPLE
-    Copy-DropboxFile -Source /test.txt -Destination /PowerShell/test.txt -SelectUser powershell@example.com
+    PS> Copy-DropboxFile -Source /test.txt -Destination /PowerShell/test.txt -SelectUser powershell@example.com -token <teammemberfileaccess>
 
-    Copies file test.txt to PowerShell folder on powershell@example.com team member' Dropbox folder.
+    Copies file test.txt to PowerShell folder on powershell@example.com team member' Dropbox folder. 
 #>
 function Copy-DropboxFile {
-    [cmdletbinding()]
+    [cmdletbinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     param(
         # Dropbox API access token. Command can be run on behalf of team member (Requires Team member file acess token)
         [parameter(Mandatory,HelpMessage="Enter Dropbox API or Dropbox Business(Team member file access) access token")]
@@ -25,7 +27,7 @@ function Copy-DropboxFile {
         [string]$Source,
         # Path in the user's Dropbox that is the destination.
         [parameter(Mandatory,Position=1)]
-        [string]$Desntination,
+        [string]$Destination,
         # Will copy contents in shared folder, otherwise RelocationError.cant_copy_shared_folder error will be returned.
         [switch]$AllowSharedFolder,
         # If there's a name conflict, Dropbox will try to autorename the file to avoid conflict.
@@ -41,25 +43,27 @@ function Copy-DropboxFile {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
     process{
         $Body = @{
             from_path=$Source
-            to_path=$Desntination
+            to_path=$Destination
             allow_shared_folder=$AllowSharedFolder.IsPresent
             autorename=$AutoRename.IsPresent
             allow_ownership_transfer=$AllowOwnershipTransfer.IsPresent
         }
 
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result.metadata
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("$Destination","Copy folder $Source")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result.metadata
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     end{}
@@ -69,14 +73,22 @@ function Copy-DropboxFile {
 .SYNOPSIS
     Create a folder in Dropbox
 .DESCRIPTION
-    Create a folder in Dropbox in specified path.
+    Create a single folder in Dropbox in specified path.
+    Dropbox Business users are able to run this command on user's behalf using the SelectUser parameter and providing Team Member File Access permission access token.
+    Team Information access token is required for resolving team_member_id.
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-create_folder.
 .EXAMPLE
-    New-DropboxFolder -Path "/PowerShell/Modules/Dropbox"
+    PS> New-DropboxFolder -Path "/PowerShell/Modules/Dropbox" -token <access token>
+
+    Creates Dropbox folder in /PowerShell/Modules directory.
+.EXAMPLE
+    PS> New-DropboxFolder -Path "/PowerShell/Modules/Dropbox" -SelectUser powershell@example.com -token <TeamMemberfileAccess>
+
+    Creates Dropbox foller in /PowerShell/Modules directory for user powershell@example.com.
 #>
 function New-DropboxFolder {
-    [cmdletbinding()]
+    [cmdletbinding(SupportsShouldProcess,ConfirmImpact="Low")]
     param(
         # Path in user's Dropbox to create
         [parameter(Mandatory)]
@@ -95,7 +107,7 @@ function New-DropboxFolder {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -105,13 +117,14 @@ function New-DropboxFolder {
             path=$Path
             autorename=$AutoRename.IsPresent
         }
-
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result.metadata
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("$Path","Create new Dropbox folder")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result.metadata
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     end{}
@@ -119,16 +132,24 @@ function New-DropboxFolder {
 
 <#
 .SYNOPSIS
-    Create multiple folders in Dropbox at once.
+    Create multiple folders.
 .DESCRIPTION
+    Create multiple folder in Dropbox in one call.
+    Dropbox Business users are able to run this command on user's behalf using the SelectUser parameter and providing Team Member File Access permission access token.
+    Team Information access token is required for resolving team_member_id.
+    
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-create_folder_batch.
 .EXAMPLE
-    New-DropboxBatchFolder -Paths /Pictures,/Documents,/Videos
+    PS> New-DropboxBatchFolder -Paths /Pictures,/Documents,/Videos -Token <access token>
 
-    Create folders "Pictures", "Documents", "Videos"
+    Create folders "Pictures", "Documents", "Videos".
+.EXAMPLE
+    PS> New-DropboxBatchFolder -Paths /Pictures,/Documents,/Videos -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+    Create folders "Pictures", "Documents", "Videos" in powershell@example.com's Dropbox.
 #>
 function New-DropboxBatchFolder {
-    [cmdletbinding()]
+    [cmdletbinding(SupportsShouldProcess,ConfirmImpact="Low")]
     param(
         [parameter(Mandatory)]
         # List of paths to be created in user's Dropbox. Duplicate arguments are considered only once.
@@ -149,7 +170,7 @@ function New-DropboxBatchFolder {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
         $NewFolders = New-Object System.Collections.ArrayList
@@ -163,12 +184,14 @@ function New-DropboxBatchFolder {
             autorename=$AutoRename.IsPresent
             force_async=$ForceAsync.IsPresent
         }
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result.entries | Format-Table
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("$Paths","Create folders")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result.entries | Format-Table
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     end{}
@@ -182,9 +205,13 @@ function New-DropboxBatchFolder {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-delete.
 .EXAMPLE
-    Remove-DropboxFile -Path /PowerShell.psm1
+    PS> Remove-DropboxFile -Path /PowerShell.psm1 -Token <access token>
 
     Remove file PowerShell.psm1 in root folder.
+.EXAMPLE
+    PS> Remove-DropboxFile -Path /PowerShell.psm1 -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+    Remove file PowerShell.psm1 in powershell@example.com's Dropbox root folder.
 #>
 function Remove-DropboxFile {
     [cmdletbinding(SupportsShouldProcess,ConfirmImpact="High")]
@@ -204,7 +231,7 @@ function Remove-DropboxFile {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -233,9 +260,13 @@ function Remove-DropboxFile {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-delete_batch.
 .EXAMPLE
-    Remove-DropboxBatchFile -Paths /1,/2,/3,/4,/5
+    PS> Remove-DropboxBatchFile -Paths /1,/2,/3,/4,/5 -Token <access token>
 
     Remove files or folders 1,2,3,4,5.
+.EXAMPLE
+    PS> Remove-DropboxBatchFile -Paths /1,/2,/3,/4,/5 -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+    Remove files or folders 1,2,3,4,5 in powershell@example.com's Dropbox folder.
 #>
 function Remove-DropboxBatchFile {
     [cmdletbinding(SupportsShouldProcess,ConfirmImpact="High")]
@@ -255,7 +286,7 @@ function Remove-DropboxBatchFile {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
         $Entries = New-Object -TypeName System.Collections.ArrayList
@@ -268,7 +299,7 @@ function Remove-DropboxBatchFile {
         $Body = @{
             entries=@($Entries)
         }
-        if ($PSCmdlet.ShouldProcess("Dropbox","Delete specified paths")) {
+        if ($PSCmdlet.ShouldProcess("$Paths","Delete specified paths")) {
             try {
                 $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
                 Write-Output $Result.async_job_id
@@ -289,11 +320,10 @@ function Remove-DropboxBatchFile {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-delete_batch-check.
 .EXAMPLE
-    $AsyncJobID = Remove-DropboxBatchFile -Paths /1,/2,/3,/4,/5
-    
-    Get-DropboxDeleteBatchStatus -AsyncJobId $AsyncJobID
+    PS> $AsyncJobID = Remove-DropboxBatchFile -Paths /1,/2,/3,/4,/5
+    PS> Get-DropboxDeleteBatchStatus -AsyncJobId $AsyncJobID
 
-    Add async_job_id from Remove-DropboxBatchFile to variable $AsyncJobID and specify variable to AsyncJobID parameter/
+    Add async_job_id from Remove-DropboxBatchFile to variable $AsyncJobID and specify variable to AsyncJobID parameter.
 #>
 function Get-DropboxDeleteBatchStatus {
     [cmdletbinding()]
@@ -312,7 +342,7 @@ function Get-DropboxDeleteBatchStatus {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -339,17 +369,21 @@ function Get-DropboxDeleteBatchStatus {
 
    Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-list_folder.
 .EXAMPLE
-   Get-DropboxFolderList
+   PS> Get-DropboxFolderList -Token <access token>
 
    Get contents from root Dropbox folder.
 .EXAMPLE
-   Get-DropboxFolderList -Path /Pictures -IncludeMediaInfo
+   PS> Get-DropboxFolderList -Path /Pictures -IncludeMediaInfo -Token <access token>
 
    Get contents from /Pictures folder and include media information.
 .EXAMPLE
-   Get-DropboxFolderList -Recursive
+   PS> Get-DropboxFolderList -Recursive -Token <access token>
 
    Get contents from root Dropbox folder and content from child folders recursively.
+.EXAMPLE
+   PS> Get-DropboxFolderList -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Get contents from powershell@example.com's root Dropbox folder.
 #>
 function Get-DropboxFolderList {
     [CmdletBinding()]
@@ -381,7 +415,7 @@ function Get-DropboxFolderList {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -414,13 +448,17 @@ function Get-DropboxFolderList {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-list_revisions.
 .EXAMPLE
-    Get-DropboxFileRevision -Mode path -Path /Dropbox.psm1 -Limit 100
+    PS> Get-DropboxFileRevision -Mode path -Path /Dropbox.psm1 -Limit 100 -Token <access token>
 
     Get up to 100 revision entries for file Dropbox.psm1
 .EXAMPLE
-    Get-DropboxFileRevision -Mode id -ID id:abcdefghijklmnop
+    PS> Get-DropboxFileRevision -Mode id -ID id:abcdefghijklmnop -Token <access token>
     
     Get defualt 10 revision entries for file id id:abcdefghijklmnop
+.EXAMPLE
+    PS> Get-DropboxFileRevision -Mode path -Path /Dropbox.psm1 -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+    Get up to 100 revision entries for powershell@example.com's Dropbox.psm1 file.
 #>
 function Get-DropboxFileRevision {
     [cmdletbinding()]
@@ -450,7 +488,7 @@ function Get-DropboxFileRevision {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -487,7 +525,7 @@ function Get-DropboxFileRevision {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-move.
 .EXAMPLE
-    Move-DropboxFile -Source /Source -Destination /Destination/Source
+    PS> Move-DropboxFile -Source /Source -Destination /Destination/Source
 
     Move Source Dropbox folder to Destination folder retaining the folder name "Source"
 #>
@@ -518,7 +556,7 @@ function Move-DropboxFile {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -551,9 +589,13 @@ function Move-DropboxFile {
 
     Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-restore.
 .EXAMPLE
-    Restore-DropboxFileRevision -Path /restored.txt -Revision 123abcdefghi
+    PS> Restore-DropboxFileRevision -Path /restored.txt -Revision 123abcdefghi -Token <access token>
 
     Restores file revision 123abcdefghi to file "restored.txt" in user's Dropbox root folder.
+.EXAMPLE
+    PS> Restore-DropboxFileRevision -Path /restored.txt -Revision 123abcdefghi -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+    Restores file revision 123abcdefghi to file "restored.txt" in powershell@example.com's Dropbox folder.
 #>
 function Restore-DropboxFileRevision {
     [cmdletbinding()]
@@ -577,7 +619,7 @@ function Restore-DropboxFileRevision {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -605,13 +647,17 @@ function Restore-DropboxFileRevision {
 
    Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-search.
 .EXAMPLE
-   Search-DropboxFile -Query "Dropbox Files.psm1"
+   PS> Search-DropboxFile -Query "Dropbox Files.psm1" -Token <access token>
 
    Searches entire Dropbox folder for Dropbox Files module.
 .EXAMPLE
-   Search-DropboxFile -Query "oops.docx" -Mode deleted_filename -Path /Documents
+   PS> Search-DropboxFile -Query "oops.docx" -Mode deleted_filename -Path /Documents -Token <access token>
 
    Seraches Documents folder for deleted file named oops.docx
+.EXAMPLE
+   PS> Search-DropboxFile -Query passwords -Mode filename_and_content -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Searches powershell@example.com's Dropbox folder for and file or content that contains query "passwords"
 #>
 function Search-DropboxFile {
     [CmdletBinding()]
@@ -641,7 +687,7 @@ function Search-DropboxFile {
         $Header = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
         $Header.Add("Authorization","Bearer $Token")
         if ($SelectUser){
-            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }
@@ -672,11 +718,15 @@ function Search-DropboxFile {
 .Synopsis
    Get metadata for file or folder.
 .DESCRIPTION
-   Long description
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#files-get_metadata.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Get-DropboxFileMetadata -Path /test.jpg -IncludeMediaInfo -Token <access token>
+
+   Get file metadata for file test.jpg including media info.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Get-DropboxFileMetadata -Path /test.jpg -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Get file metadata for file test.jpg in powershell@example.com's Dropbox folder.
 #>
 function Get-DropboxFileMetadata {
     [CmdletBinding()]
@@ -707,7 +757,7 @@ function Get-DropboxFileMetadata {
         $URI='https://api.dropboxapi.com/2/files/get_metadata'
         $Header=@{"Authorization"="Bearer $Token"}
         if ($SelectUser){
-            $MemberId = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
+            $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser -Token (Get-DropboxToken -Permission TeamInformation)).team_member_id
             $Header.add("Dropbox-API-Select-User",$MemberId)
         }
     }

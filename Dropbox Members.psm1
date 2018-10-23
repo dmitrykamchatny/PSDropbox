@@ -1,118 +1,20 @@
 ﻿<#
 .Synopsis
-   List members of a team.
-.DESCRIPTION
-   Cmdlet returns a sorted basic list of current Dropbox team members.
-
-   /member/list/continue is currently not supported.
-
-   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-list.
-.EXAMPLE
-   Get-DropboxMemberList -Limit 100 -IncludeRemoved
-    
-   Cmdlet will return exactly 100 members including removed team members.
-#>
-function Get-DropboxMemberList {
-    [CmdletBinding()]
-    Param(
-        # Number of results to return per call.
-        [ValidateRange(1,1000)]
-        [int]$Limit=200,
-        # Whether to return removed members, default is false.
-        [switch]$IncludeRemoved,
-        # Dropbox API access token.
-        [parameter(Mandatory,HelpMessage="Enter TeamInformation access token")]
-        [string]$Token
-    )
-
-    Begin{
-        $URI = "https://api.dropboxapi.com/2/team/members/list"
-        $Header = @{"Authorization"="Bearer $Token"}
-    }
-    Process{
-        
-        $Body = @{
-            limit=$Limit
-            include_removed=$IncludeRemoved.IsPresent
-        }
-        
-        $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-        Write-Output $Result.members.profile | Sort-Object email
-    }
-    End{}
-}
-
-<#
-.Synopsis
-   Get information for one or more team members.
-.DESCRIPTION
-   Get information for specific team member(s).
-
-   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-get_info.
-.EXAMPLE
-   Get-DropboxMemberInfo -MemberEmail team.member@example.com
-
-   Cmdlet gets information for team.member@example.com
-.EXAMPLE
-   Get-DropboxMemberInfo -MemberEmail team.member@example.com, team.member2@example.com
-
-   Cmdlet gets information for multiple team members.
-#>
-function Get-DropboxMemberInfo {
-    [CmdletBinding()]
-    Param(
-        # Dropbox team member's email address
-        [parameter(Mandatory=$true,ParameterSetName="Email")]
-        [ValidateLength(1,255)]
-        [string[]]$MemberEmail,
-        # Dropbox team member's team_member_id
-        [parameter(Mandatory=$true,ParameterSetName="MemberId")]
-        [string[]]$TeamMemberId,
-        # Dropbox tema member's external_id
-        [parameter(Mandatory=$true,ParameterSetName="ExternalId")]
-        [ValidateLength(1,64)]
-        [string[]]$ExternalId,
-        # Dropbox API access token.
-        [parameter(Mandatory,HelpMessage="Enter TeamInformation access token")]
-        [string]$Token
-    )
-
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/get_info'
-        $Header = @{"Authorization"="Bearer $Token"}
-        $Members = New-Object -TypeName System.Collections.ArrayList
-    }
-    Process{
-
-        foreach ($Address in $MemberEmail) {
-            $Members.Add(@{".tag"="email";email=$Address}) | Out-Null
-        }
-        foreach ($Id in $TeamMemberId) {
-            $Members.Add(@{".tag"="team_member_id";team_member_id=$Id}) | Out-Null
-        }
-        foreach ($Id in $ExternalId) {
-            $Members.Add(@{".tag"="external_id";external_id=$Id}) | Out-Null
-        }
-
-        $Body = @{
-            members=$Members
-        }
-        
-        $Response = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-        Write-Output $Response.profile
-    }
-    End{
-    }
-}
-
-<#
-.Synopsis
    Adds member to team.
 .DESCRIPTION
-   Currently only support a single user per call.
+   Adds a member to Dropbox team. If no Dropbox account exists with specified email a new Dropbox account will be created and invited to team.
+
+   If a personal account exists with specified email address, a placeholder account will be created and user will be invited to the team. The user will be promted to migrate their existing personal account onto the team.
+   Currently only support a single user per call due to the large number of parameters.
+
+   Added member will be required to complete Dropbox account setup.
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-add.
 .EXAMPLE
+   PS> $TeamMemberManagement = Get-DropboxToken -Permission TeamMemberManagement
+   PS> Add-DropboxMember -MemberEmail powershell@example.com -MemberGivenName Power -MemberSurname Shell -Role team_admin -MemberExternalId Powershell -SendWelcomeEmail -Token $TeamMemberManagement
+
+   Adds user powershell@example.com as a team admin.
     
 #>
 function Add-DropboxMember {
@@ -200,13 +102,128 @@ function Add-DropboxMember {
 
 <#
 .Synopsis
+   Get information for one or more team members.
+.DESCRIPTION
+   Get information for specific team member(s). Member's can be specified by email, team_member_id or external_id.
+
+   This cmdlet is also used to resolve team_member_id for some calls that only support that parameter.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-get_info.
+.EXAMPLE
+   PS> Get-DropboxMemberInfo -MemberEmail team.member@example.com
+
+   Cmdlet gets information for team.member@example.com
+.EXAMPLE
+   PS> Get-DropboxMemberInfo -MemberEmail team.member@example.com, team.member2@example.com
+
+   Cmdlet gets information for multiple team members.
+#>
+function Get-DropboxMemberInfo {
+    [CmdletBinding()]
+    Param(
+        # Dropbox team member's email address
+        [parameter(Mandatory=$true,ParameterSetName="Email")]
+        [ValidateLength(1,255)]
+        [string[]]$MemberEmail,
+        # Dropbox team member's team_member_id
+        [parameter(Mandatory=$true,ParameterSetName="MemberId")]
+        [string[]]$TeamMemberId,
+        # Dropbox tema member's external_id
+        [parameter(Mandatory=$true,ParameterSetName="ExternalId")]
+        [ValidateLength(1,64)]
+        [string[]]$ExternalId,
+        # Dropbox API access token.
+        [parameter(Mandatory,HelpMessage="Enter TeamInformation access token")]
+        [string]$Token
+    )
+
+    Begin{
+        $URI='https://api.dropboxapi.com/2/team/members/get_info'
+        $Header = @{"Authorization"="Bearer $Token"}
+        $Members = New-Object -TypeName System.Collections.ArrayList
+    }
+    Process{
+
+        foreach ($Address in $MemberEmail) {
+            $Members.Add(@{".tag"="email";email=$Address}) | Out-Null
+        }
+        foreach ($Id in $TeamMemberId) {
+            $Members.Add(@{".tag"="team_member_id";team_member_id=$Id}) | Out-Null
+        }
+        foreach ($Id in $ExternalId) {
+            $Members.Add(@{".tag"="external_id";external_id=$Id}) | Out-Null
+        }
+
+        $Body = @{
+            members=$Members
+        }
+        
+        $Response = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+        Write-Output $Response.profile
+    }
+    End{
+    }
+}
+
+<#
+.Synopsis
+   List members of a team.
+.DESCRIPTION
+   Cmdlet returns a sorted basic list of current Dropbox team members.
+
+   /member/list/continue is currently not supported.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-list.
+.EXAMPLE
+   PS> Get-DropboxMemberList
+    
+   Cmdlet will return information for 100 users (Default)
+.EXAMPLE
+   PS> Get-DropboxMemberList -Limit 1000 -IncludeRemoved
+
+   Cmdlet will return information for 1000 (maximum) users including any removed members.
+#>
+function Get-DropboxMemberList {
+    [CmdletBinding()]
+    Param(
+        # Number of results to return per call.
+        [ValidateRange(1,1000)]
+        [int]$Limit=200,
+        # Whether to return removed members, default is false.
+        [switch]$IncludeRemoved,
+        # Dropbox API access token.
+        [parameter(Mandatory,HelpMessage="Enter TeamInformation access token")]
+        [string]$Token
+    )
+
+    Begin{
+        $URI = "https://api.dropboxapi.com/2/team/members/list"
+        $Header = @{"Authorization"="Bearer $Token"}
+    }
+    Process{
+        
+        $Body = @{
+            limit=$Limit
+            include_removed=$IncludeRemoved.IsPresent
+        }
+        
+        $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+        Write-Output $Result.members.profile | Sort-Object email
+    }
+    End{}
+}
+
+<#
+.Synopsis
    Send Dropbox welcome email.
 .DESCRIPTION
    Sends Dropbox welcome email to a pending member.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-send_welcome_email.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Send-DropboxWelcomeEmail -MemberEmail powershell@example.com -Token <TeamMemberManagement>
+
+   Sends a Dropbox welcomd email to powershell@example.com.
 #>
 function Send-DropboxWelcomeEmail {
     [CmdletBinding()]
@@ -265,12 +282,12 @@ function Send-DropboxWelcomeEmail {
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-set_admin_permissions.
 
 .EXAMPLE
-   Set-DropboxMemberPermissions -MemberEmail team.member@example.com -NewRole team_admin
+   PS> Set-DropboxMemberPermissions -MemberEmail team.member@example.com -NewRole team_admin -Token <TeamMemberManagement>
 
    Cmdlet sets team.member's role to team_admin.
 #>
 function Set-DropboxMemberPermissions {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
     Param(
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
@@ -312,12 +329,14 @@ function Set-DropboxMemberPermissions {
             new_role=$NewRole
         }
    
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch { 
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("Email: $MemberEmail, TeamMemberId: $TeamMemberId, ExternalId: $ExternalId","Update administrative permissions")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch { 
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{
@@ -330,22 +349,20 @@ function Set-DropboxMemberPermissions {
 .DESCRIPTION
    Update a team member's profile.
 
-   The following parameters can be altered:
-
-        Email
-        GivenName
-        Surname
-        ExternalId
-        PersistentId
+   The following parameters can be altered: Email, GivenName, Surname, ExternalId, PersistentId
 
     Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-set_profile.
 .EXAMPLE
-   Set-DropboxMemberProfile -MemberEmail team.member@example.com -GivenName test -Surname user
+   PS> Set-DropboxMemberProfile -MemberEmail team.member@example.com -GivenName test -Surname user -Token <TeamMemberManagement>
 
    Cmdlet sets team.members's first name to "test" and last name to "user".
+.EXAMPLe
+   PS> Set-DropboxMemberProfile -MemberEmail team.member@example.com -ExternalId teammember -Token <TeamMemberManagement>
+
+   Cmdlet sets team.member's external_id to teammember.
 #>
 function Set-DropboxMemberProfile {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
@@ -416,13 +433,14 @@ function Set-DropboxMemberProfile {
             $Body.Add("new_is_directory_restricted",$NewIsDirectoryRestricted.IsPresent)
         }
 
-        
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result.profile
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("Email: $Email, TeamMemberId: $TeamMemberId, ExternalId: $ExternalId","Update member profile")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result.profile
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{}
@@ -430,13 +448,15 @@ function Set-DropboxMemberProfile {
 
 <#
 .Synopsis
-   Short description
+   Suspend a member from a team.
 .DESCRIPTION
-   Long description
+   Suspend a team member from a team. All access will be revoked until Unsuspend-DropboxMember is run.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-suspend.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Suspend-DropboxMember -MemberEmail powershell@example.com -token <TeamMemberManagement>
+
+   Suspends user powershell@example.com.
 #>
 function Suspend-DropboxMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
@@ -489,16 +509,16 @@ function Suspend-DropboxMember {
 
 <#
 .Synopsis
-   Short description
+   Unsuspend a member from a team.
 .DESCRIPTION
-   Long description
+   Unsuspend a member from a team. Allows user to login to Dropbox again.
 .EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Unsuspend-DropboxMember -MemberEmail powershell@example.com -Token <TeamMemberManagement>
+
+   Unsuspend user powershell@example.com.
 #>
 function Unsuspent-DropboxMember {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
     Param(
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
@@ -531,11 +551,277 @@ function Unsuspent-DropboxMember {
             $Body= @{user=@{".tag"="external_id";external_id=$ExternalId}}
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess($Body,"Unsuspend member")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
+        }
+    }
+    End{}
+}
+
+<#
+.Synopsis
+   Move removed member's files.
+.DESCRIPTION
+   Move removed member's files to a different member.
+
+   The call requires an id for the user, destination user and administrator where email address, external_id or team_member_id can be specified. If an email and team_member_id is specified for a user, email address will take presidence.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-move_former_member_files.
+.EXAMPLE
+   PS> Move-DropboxMemberFiles -MemberEmail powershell@example.com -DestinationEmail cmd@example.com -AdminEmail admin@example.com -Token <TeamMemberManagement>
+
+   Moves powershell@example.com's Dropbox files to cmd@example.com. If an error occurs, admin@example.com will receive an error email.
+.EXAMPLE
+   PS> Move-DropboxMemberFiles -MemberEmail powershell@example.com -TeamMemberId pwsh:1231241241 -DestinationEmail cmd@example.com -AdminEmail admin@example.com -Token <TeamMemberManagement>
+
+   Both MemberEmail and TeamMemberId are specified, MemberEmail will take presidence.
+#>
+function Move-DropboxMemberFiles {
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
+    Param(
+        # Member's team_member_id.
+        [string]$TeamMemberId,
+        # Member's external_id.
+        [string]$ExternalId,
+        # Member's email address.
+        [string]$MemberEmail,
+        # Destination member's team_member_id.
+        [string]$DestinationTeamMemberId,
+        # Destination member's external_id.
+        [string]$DestinationExternalId,
+        # Destination member's email address.
+        [string]$DestinationEmail,
+        # Administrator team_member_id.
+        [string]$AdminTeamMemberId,
+        # Administrator external_id.
+        [string]$AdminExternalId,
+        # Administrator email address.
+        [string]$AdminEmail,
+        # Dropbox API access token.
+        [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
+        [string]$Token
+    )
+
+    Begin{
+        $URI='https://api.dropboxapi.com/2/team/members/move_former_member_files'
+        $Header=@{"Authorization"="Bearer $Token"}
+    }
+    Process{
+
+        # User
+        if ($MemberEmail) {
+            $User=@{".tag"="email";email=$MemberEmail}
+        } elseif ($ExternalId) {
+            $User=@{".tag"="external_id";external_id=$ExternalId}
+        } elseif ($TeamMemberId) {
+            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+        }
+        # Destination member
+        if ($DestinationEmail) {
+            $Destination=@{".tag"="email";email=$DestinationEmail}
+        } elseif ($DestinationExternalId) {
+            $Destination=@{".tag"="external_id";external_id=$DestinationExternalId}
+        } elseif ($DestinationTeamMemberId) {
+            $Destination=@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId}
+        }
+        # Admin
+        if ($AdminEmail) {
+            $Admin=@{".tag"="email";email=$AdminEmail}
+        } elseif ($AdminExternalId) {
+            $Admin=@{".tag"="external_id";external_id=$AdminExternalId}
+        } elseif ($AdminTeamMemberId) {
+            $Admin=@{".tag"="team_member_id";team_member_id=$AdminTeamMemberId}
+        }
+
+        $Body = @{
+            user=$User
+            transfer_dest_id=$Destination
+            transfer_admin_id=$Admin
+        }
+        
+        if ($PSCmdlet.ShouldProcess($Destination,"Move $User files to")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body -Depth 3)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
+        }
+    }
+    End{
+    }
+}
+
+<#
+.Synopsis
+   Recover deleted member.
+.DESCRIPTION
+   Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-recover.
+.EXAMPLE
+   Restore-DropboxMember -MemberEmail powershell@example.com -Token <TeamMemberManagement>
+
+   Restores member powershell@example.com.
+#>
+function Restore-DropboxMember {
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
+    Param(
+        # Dropbox member's team_member_id.
+        [parameter(Mandatory,ParameterSetName="TeamMemberId")]
+        [string]$TeamMemberId,
+        # Dropbox member's external_id.
+        [parameter(Mandatory,ParameterSetName="ExternalId")]
+        [string]$ExternalId,
+        # Dropbox member's email address.
+        [parameter(Mandatory,ParameterSetName="MemberEmail")]
+        [string]$MemberEmail,
+        # Dropbox API access token.
+        [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
+        [string]$Token
+    )
+
+    Begin{
+        $URI='https://api.dropboxapi.com/2/team/members/recover'
+        $Header=@{"Authorization"="Bearer $Token"}
+    }
+    Process{
+        if ($MemberEmail) {
+            $User=@{".tag"="email";email=$MemberEmail}
+        } elseif ($ExternalId) {
+            $User=@{".tag"="external_id";external_id=$ExternalId}
+        } elseif ($TeamMemberId) {
+            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+        }
+        
+        $Body = @{
+            user=$User
+        }
+        
+        if ($PSCmdlet.ShouldProcess("$User","Restore Dropbox member")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
+        }
+    }
+    End{
+    }
+}
+
+<#
+.Synopsis
+   Remove member from Dropbox team.
+.DESCRIPTION
+   Remove exactly one member from a Dropbox team.
+
+   Accounts can be recoved via Restore-DropboxMember (members/recover call) cmdlet for a 7 day period or until account is permanently deleted or transferred to another account(whichever comes first).
+
+   Attempting to restore member with Add-DropboxMember (members/add call) cmdlet will result in user_already_on_team error.
+
+   Accounts can have files transferred via admin console for a limited time based on version history length associated with the team (120 days for most teams).
+.EXAMPLE
+   PS> Remove-DropboxMember -MemberEmail powershell@example.com -WipeData -Token <TeamMemberManagement>
+
+   Remove powershell@example.com member from Dropbox team and wipe any data present on user's devices.
+.EXAMPLE
+   PS> Remove-DropboxMember -MemberEmail powershell@example.com -DestinationEmail admin@example.com -AdminEmail admin@example.com -Token <TeamMemberManagement>
+
+   Remove powershell@example.com member from Dropbox team and transfer member's files to admin@example.com. 
+.EXAMPLE
+   PS> Remove-DropboxMember -MemberEmail powershell@example.com -KeepAccount -Token <TeamMemberManagement>
+
+   Remove powershell@example.com member from Dropbox team and allow member to retain Dropbox account as basic / personal.
+#>
+function Remove-DropboxMember {
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
+    Param(
+        # Dropbox member's team_member_id.
+        [parameter(Mandatory,ParameterSetName="TeamMemberId")]
+        [string]$TeamMemberId,
+        # Dropbox member's external_id.
+        [parameter(Mandatory,ParameterSetName="ExternalId")]
+        [string]$ExternalId,
+        # Dropbox member's email address.
+        [parameter(Mandatory,ParameterSetName="MemberEmail")]
+        [string]$MemberEmail,
+        # Destination member's team_member_id to transfer removed member's files.
+        [string]$DestinationTeamMemberId,
+        # Destination member's external_id to transfer removed member's files.
+        [string]$DestinationExternalId,
+        # Destination member's email address to transfer removed member's files.
+        [string]$DestinationEmail,
+        # Administrator team_member_id to receive errors. Must be used if destination account is specified.
+        [string]$AdminTeamMemberId,
+        # Administrator external_id to receive errors. Must be used if destination account is specified.
+        [string]$AdminExternalId,
+        # Administrator email address to receive errors. Must be used if destination account is specified.
+        [string]$AdminEmail,
+        # Whether data will be deleted off linked devices.
+        [switch]$WipeData,
+        # Whether to downgrade account to a basic account. User will retain data and email address associated with Dropbox account.
+        [switch]$KeepAccount,
+        # Dropbox API access token.
+        [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
+        [string]$Token
+    )
+
+    Begin{
+        $URI='https://api.dropboxapi.com/2/team/members/remove'
+        $Header=@{"Authorization"="Bearer $Token"}
+    }
+    Process{
+        
+        if ($MemberEmail) {
+            $User=@{".tag"="email";email=$MemberEmail}
+        } elseif ($ExternalId) {
+            $User=@{".tag"="external_id";external_id=$ExternalId}
+        } elseif ($TeamMemberId) {
+            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+        }
+
+        $Body = @{
+            user=$User
+            wipe_data=$WipData.ispresent
+            keep_account=$KeepAccount.IsPresent
+        }
+
+        if ($DestinationEmail -or $DestinationExternalId -or $DestinationTeamMemberId) {
+            if ($DestinationEmail) {
+                $Body.Add("transfer_dest_id",@{".tag"="email";email=$DestinationEmail})
+            } elseif ($DestinationExternalId) {
+                $Body.Add("transfer_dest_id",@{".tag"="external_id";external_id=$ExternalId})               
+            } elseif ($DestinationTeamMemberId) {
+                $Body.Add("transfer_dest_id",@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId})
+            }
+            # Admin id required for transfer_dest_id.
+            if ($AdminEmail) {
+                $Body.Add("transfer_admin_id",@{".tag"="email";email=$AdminEmail})
+            } elseif ($AdminExternalId) {
+                 $Body.Add("transfer_admin_id",@{".tag"="external_id";external_id=$AdminExternalId})               
+            } elseif ($AdminTeamMemberId) {
+                $Body.Add("transfer_admin_id",@{".tag"="team_member_id";team_member_id=$AdminTeamMemberId})
+            } else {
+                Write-Warning "Specifying a destination account requires admin id to be specified."
+            }
+
+        }
+
+        if ($PSCmdlet.ShouldProcess($Body,"Remove Dropbox team member")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{}
