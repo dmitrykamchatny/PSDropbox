@@ -2,11 +2,19 @@
 .Synopsis
    Add specific members to a file.
 .DESCRIPTION
-   Long description
+   Add specific member to a file.
+
+   File must be already be shared.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-add_file_member.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Add-DropboxFileMember -Path /share.txt -MemberEmail powershell@example.com -CustomMessage "Sharing this file" -AccessLevel viewer -Token <access token>
+
+   Allows powershell@example.com as a viewer for file share.txt.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Add-DropboxFileMember -Path /share.txt -MemberEmail powershell@example.com -Quiet -AccessLevel owner -SelectUser ps@example.com -Token <TeamMemberFileAccess>
+
+   Adds powershell@example.com as owner for file share.txt on behalf of ps@example.com
 #>
 function Add-DropboxFileMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
@@ -47,21 +55,22 @@ function Add-DropboxFileMember {
         }
     }
     Process{
-
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "file") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $File = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FilePath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "file") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $File = $Resolve.shared_folder_id
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "File not found: $Path"
+                } else {
+                    Write-Warning "Specified path is not a file, use Add-DropboxFolderMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "File not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a file, use Add-DropboxFolderMember instead."
             }
-        }
-        if ($FileId) {
-            $File = $FileId
+            "FileId" {
+                $File = $FileId
+            }
         }
 
         foreach ($Address in $MemberEmail) {
@@ -81,12 +90,14 @@ function Add-DropboxFileMember {
             $Body.Add("custom_message",$CustomMessage) | Out-Null
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("Path: $Path, FileId: $FileId","Add $MemberEmail as $AccessLevel")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{}
@@ -96,7 +107,17 @@ function Add-DropboxFileMember {
 .SYNOPSIS
    Add specific members to a folder.
 .DESCRIPTION
+   Folder must already be shared using New-DropboxSharedFolder.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-add_folder_member.
 .EXAMPLE
+   PS> Add-DropboxFolderMember -Path /share -MemberEmail powershell@example.com -AccessLevel editor -Token <access level>
+
+   Allow powershell@example.com to collaborate for content located in /share folder.
+.EXAMPLE
+   PS> Add-DropboxFolderMember -Path /share -MemberEmail powershell@example.com -AccessLevel editor -SelectUser ps@example.com -Token <TeamMemberFileAccess>
+
+   Allow powershell@example.com to collaborate for content located in ps@example.com's /share folder.
 #>
 function Add-DropboxFolderMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
@@ -137,23 +158,24 @@ function Add-DropboxFolderMember {
         }
     }
     Process{
-
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "folder") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $Folder = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FolderPath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "folder") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $Folder = $Resolve.shared_folder_id
+                    } else {
+                        Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "Folder not found: $Path"
                 } else {
-                    Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "Folder not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
             }
-        }
-        if ($SharedFolderId) {
-            $Folder = $SharedFolderId
+            "FolderId" {
+                $Folder = $SharedFolderId
+            }
         }
 
         foreach ($Address in $MemberEmail) {
@@ -189,10 +211,16 @@ function Add-DropboxFolderMember {
    List shared file members.
 .DESCRIPTION
    Get list of members invited to a file, both inherited and uninherited members.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-list_file_members.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Get-DropboxFileMember -Path /share.txt -Token <access token>
+
+   Get all members with access to share.txt file.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Get-DropboxFileMember -Path /share.txt -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Get all members with access to powershell@example.com's share.txt file.
 #>
 function Get-DropboxFileMember {
     [CmdletBinding()]
@@ -224,20 +252,22 @@ function Get-DropboxFileMember {
         }
     }
     Process{
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "file") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $File = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FilePath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "file") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $File = $Resolve.shared_folder_id
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "File not found: $Path"
+                } else {
+                    Write-Warning "Specified path is not a file, use Add-DropboxFolderMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "File not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a file, use Add-DropboxFolderMember instead."
             }
-        }
-        if ($FileId) {
-            $File = $FileId
+            "FileId" {
+                $File = $FileId
+            }
         }
         $Body = @{
             file=$File
@@ -261,11 +291,15 @@ function Get-DropboxFileMember {
 .Synopsis
    Get shared folder members.
 .DESCRIPTION
-   Long description
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-list_folder_members.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Get-DropboxFolderMember -Path /Share -Actions leave_a_copy -Token <access token>
+
+   Get members for folder Share who are able to leave a copy of the shared folder.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Get-DropboxFolderMember -Path /Share -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Get members for powershell@example.com's Share folder.
 #>
 function Get-DropboxFolderMember {
     [CmdletBinding()]
@@ -304,22 +338,24 @@ function Get-DropboxFolderMember {
         }
     }
     Process{
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "folder") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $Folder = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FolderPath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "folder") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $Folder = $Resolve.shared_folder_id
+                    } else {
+                        Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "Folder not found: $Path"
                 } else {
-                    Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "Folder not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
             }
-        }
-        if ($SharedFolderId) {
-            $Folder = $SharedFolderId
+            "FolderId" {
+                $Folder = $SharedFolderId
+            }
         }
 
         $Body = @{
@@ -347,13 +383,19 @@ function Get-DropboxFolderMember {
 
 <#
 .Synopsis
-   Short description
+   Get list of all shared folders.
 .DESCRIPTION
-   Long description
+   Get list of all shared folders the user has access to.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-list_folders.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Get-DropboxSharedFolderList -Token <access token>
+
+   Get all shared folders in your Dropbox folder.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Get-DropboxSharedFolderList -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Get all shared folders powershell@example.com has access to.
 #>
 function Get-DropboxSharedFolderList {
     [CmdletBinding()]
@@ -420,14 +462,22 @@ function Get-DropboxSharedFolderList {
 .Synopsis
    Share a folder with collaborators.
 .DESCRIPTION
-   Long description
+   Set a Dropbox folder as a shared folder and configure shared folder properties. To add members to the shared folder, use Add-DropboxFolderMember.
+
+   If folder doesn't exist, it will be created.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-share_folder.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> New-DropboxSharedFolder -Path /Share -AccessInheritance inherit -Token <access token>
+
+   Create / set folder Share as a shared folder with inherited access.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> New-DropboxSharedFolder -Path /Share -AccessInheritance inherit -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Create / set folder Share as a shared folder in powershell@example.com's Dropbox folder.
 #>
 function New-DropboxSharedFolder {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
     Param(
         # Dropbox folder path to share. If folder doesn't exist, a new folder will be created.
         [parameter(Mandatory)]
@@ -515,12 +565,14 @@ function New-DropboxSharedFolder {
             $Body.Add("actions",$ActionList)
         }
         
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("$Path","Create/set shared folder")) {
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{
@@ -533,10 +585,16 @@ function New-DropboxSharedFolder {
 .DESCRIPTION
    Transfer ownership of a shared folder to a member of the shared folder.
    User must have folder owner access to perform transfer.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-relinquish_folder_membership.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Grant-DropboxFolderOwnership -Path /Share -DropboxId id:123123124124 -Token <access token>
+
+   Transfer Share folder ownership to DropboxId id:123123124124.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Grant-DropboxFolderOwnership -Path /Share -DropboxID id:123123123123 -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Transfer powershell@example.com's Share folder ownership to DropboxId id:123123123123.
 #>
 function Grant-DropboxFolderOwnership {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
@@ -558,7 +616,7 @@ function Grant-DropboxFolderOwnership {
     )
 
     Begin{
-        $URI='https://api.dropboxapi.com/2/'
+        $URI='https://api.dropboxapi.com/2/sharing/transfer_folder'
         $Header=@{"Authorization"="Bearer $Token"}
         if ($SelectUser){
             $MemberID = (Get-DropboxMemberInfo -MemberEmail $SelectUser).team_member_id
@@ -566,22 +624,24 @@ function Grant-DropboxFolderOwnership {
         }
     }
     Process{
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "folder") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $Folder = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FolderPath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "folder") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $Folder = $Resolve.shared_folder_id
+                    } else {
+                        Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "Folder not found: $Path"
                 } else {
-                    Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "Folder not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
             }
-        }
-        if ($SharedFolderId) {
-            $Folder = $SharedFolderId
+            "FolderId" {
+                $Folder = $SharedFolderId
+            }
         }
         $Body = @{
             shared_folder_id=$Folder
@@ -604,11 +664,17 @@ function Grant-DropboxFolderOwnership {
 .Synopsis
    Unshare Dropbox folder.
 .DESCRIPTION
-   Long description
+   May take some time for action to complete depending on how many members are shared with.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-unshare_folder.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Remove-DropboxSharedFolder -Path /Share -LeaveCopy -Token <access token>
+
+   Unshare Dropbox folder Share and allow members to retain a copy of the file.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Remove-DropboxSharedFolder -Path /Share -SelectUser powershell@example.com -Token <TeamMemberFileAccess>
+
+   Unshare powershell@example.com's Dropbox Share folder.
 #>
 function Remove-DropboxSharedFolder {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
@@ -637,22 +703,24 @@ function Remove-DropboxSharedFolder {
         }
     }
     Process{
-        if ($Path) {
-            $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
-            if ($Resolve.".tag" -eq "folder") {
-                if ($Resolve.shared_folder_id -ne $null) {
-                    $Folder = $Resolve.shared_folder_id
+        switch ($PSCmdlet.ParameterSetName) {
+            "FolderPath" {
+                $Resolve = Get-DropboxFileMetadata -Path $Path -Token $Token
+                if ($Resolve.".tag" -eq "folder") {
+                    if ($Resolve.shared_folder_id -ne $null) {
+                        $Folder = $Resolve.shared_folder_id
+                    } else {
+                        Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    }
+                } elseif ($Resolve -eq $null) {
+                    Write-Warning "Folder not found: $Path"
                 } else {
-                    Write-Warning "Folder not shared, use New-DropboxSharedFolder"
+                    Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
                 }
-            } elseif ($Resolve -eq $null) {
-                Write-Warning "Folder not found: $Path"
-            } else {
-                Write-Warning "Specified path is not a folder, use Add-DropboxFileMember instead."
             }
-        }
-        if ($SharedFolderId) {
-            $Folder = $SharedFolderId
+            "FolderId" {
+                $Folder = $SharedFolderId
+            }
         }
 
         $Body = @{
@@ -674,16 +742,22 @@ function Remove-DropboxSharedFolder {
 
 <#
 .Synopsis
-   Short description
+   Remove another member.
 .DESCRIPTION
-   Long description
+   Allows an owner or editor (if the ACL update policy allows) of a shared folder to remove another member.
+
+   Refer to https://www.dropbox.com/developers/documentation/http/documentation#sharing-remove_folder_member.
 .EXAMPLE
-   Example of how to use this cmdlet
+   PS> Remove-DropboxFolderMember -Path /Share -MemberEmail powershell@example.com -Token <access token>
+
+   Remove powershell@example.com from Share Dropbox folder.
 .EXAMPLE
-   Another example of how to use this cmdlet
+   PS> Remove-DropboxFolderMember -Path /Share -MemberEmail powershell@example.com -SelectUser ps@example.com -Token <TeamMemberFileAccess>
+
+   Remove powershell@example.com's access to ps@example.com's Share Dropbox folder.
 #>
 function Remove-DropboxFolderMember {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # Folder path to resolve folder id.
         [parameter(Mandatory,ParameterSetName="FolderPath")]
@@ -746,13 +820,14 @@ function Remove-DropboxFolderMember {
             member=$Member
             leave_a_copy=$LeaveCopy.IsPresent
         }
-        
-        try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Result
-        } catch {
-            $ResultError = $_.Exception.Response.GetResponseStream()
-            Get-DropboxError -Result $ResultError
+        if ($PSCmdlet.ShouldProcess("Path: $Path, SharedFolderId: $SharedFolderId","Remove Email: $MemberEmail, DropboxID: $DropboxId")) {        
+            try {
+                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Write-Output $Result
+            } catch {
+                $ResultError = $_.Exception.Response.GetResponseStream()
+                Get-DropboxError -Result $ResultError
+            }
         }
     }
     End{}

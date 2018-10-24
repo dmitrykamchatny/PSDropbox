@@ -499,10 +499,13 @@ function Get-DropboxFileRevision {
             limit=$Limit        
         }
 
-        if ($Mode -eq "path") {
-            $Body.Add("path",$Path)
-        } else {
-            $Body.Add("path",$Id)
+        switch ($PSCmdlet.ParameterSetName) {
+            "Path" {
+                $Body.Add("path",$Path)
+            }
+            "Id" {
+                $Body.Add("path",$Id)
+            }
         }
 
 
@@ -762,14 +765,16 @@ function Get-DropboxFileMetadata {
         }
     }
     Process{
-        if ($Path) {
-            $File = $Path
-        }
-        if ($Id) {
-            $File = $Id
-        }
-        if ($Revision) {
-            $File = $Revision
+        switch ($PSCmdlet.ParameterSetName) {
+            "FilePath" {
+                $File = $Path
+            }
+            "FileId" {
+                $File = $Id
+            }
+            "FileRevision" {
+                $File = $Revision
+            }
         }
         $Body = @{
             path=$File

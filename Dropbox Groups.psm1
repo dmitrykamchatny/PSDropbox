@@ -94,16 +94,17 @@ function Remove-DropboxGroup {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-        
-        if ($GroupId) {
-            $Body=@{".tag"="group_id";group_id=$GroupId}
-        }
-        if ($GroupExternalId) {
-            $Body=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
-        }
-        if ($GroupName) {
-            $Id = Get-DropboxGroupList -GroupName $GroupName
-            $Body=@{".tag"="group_id";group_id=$Id}
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupOd" {
+                $Body=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Body=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
+            "GroupName" {
+                $Id = Get-DropboxGroupList -GroupName $GroupName
+                $Body=@{".tag"="group_id";group_id=$Id}
+            }
         }
         
         if ($PSCmdlet.ShouldProcess("GroupName: $GroupName, GroupId: $GroupId, GroupExternalId: $GroupExternalId","Delete Dropbox group")) {
@@ -162,31 +163,27 @@ function Get-DropboxGroupInfo {
         $GroupList = New-Object -TypeName System.Collections.ArrayList
     }
     Process{
-
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
                 foreach ($Group in $GroupName) {
                     $IdList = Get-DropboxGroupList -GroupName $Group -Token $Token
                     foreach ($Id in $IdList) {
                         $GroupList.Add($Id) | Out-Null
                     }
                 }
-            } else {
+                $Body=@{".tag"="group_ids";group_ids=$GroupList}
+            }
+            "GroupId" {
                 foreach ($Group in $GroupId) {
                     $GroupList.Add($Group) | Out-Null
                 }
+                $Body=@{".tag"="group_ids";group_ids=$GroupList}
             }
-            $Body = @{
-                ".tag"="group_ids"
-                group_ids=$GroupList
-            }
-        } else {
-            foreach ($Id in $GroupExternalId) {
-                $GroupList.Add($Id) | Out-Null
-            }
-            $Body = @{
-                ".tag"="group_external_ids"
-                group_external_ids=$GroupList
+            "GroupExternalId" {
+                foreach ($Id in $GroupExternalId) {
+                    $GroupList.Add($Id) | Out-Null
+                }
+                $Body=@{".tag"="group_external_ids";group_external_ids=$GroupList}
             }
         }
         
@@ -321,16 +318,17 @@ function Add-DropboxGroupMember {
         $MemberAccess = New-Object System.Collections.ArrayList
     }
     Process{
-        
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
                 $Id = Get-DropboxGroupList -GroupName $GroupName
-            } else {
-                $Id = $GroupId
+                $Group=@{".tag"="group_id";group_id=$Id}
             }
-            $Group=@{".tag"="group_id";group_id=$Id}
-        } else {
-            $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            "GroupId" {
+                $Group=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
         }
 
         foreach ($Email in $MemberEmail) {
@@ -401,15 +399,17 @@ function Get-DropboxGroupMemberList {
 	    $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
                 $Id = Get-DropboxGroupList -GroupName $GroupName -Token $Token
-            } else {
-                $Id = $GroupId
+                $Group=@{".tag"="group_id";group_id=$Id}
             }
-            $Group=@{".tag"="group_id";group_id=$Id}
-        } else {
-            $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            "GroupId" {
+                $Group=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
         }
 
         $Body = @{
@@ -484,15 +484,17 @@ function Remove-DropboxGroupMember {
         $Members = New-Object -TypeName System.Collections.ArrayList
     }
     Process{
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
-                $Id = Get-DropboxGroupList -GroupName $GroupName
-            } else {
-                $Id = $GroupId
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
+                $Id = Get-DropboxGroupList -GroupName $GroupName -Token $Token
+                $Group=@{".tag"="group_id";group_id=$Id}
             }
-            $Group=@{".tag"="group_id";group_id=$Id}
-        } else {
-            $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            "GroupId" {
+                $Group=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
         }
 
         foreach ($Email in $MemberEmail) {
@@ -573,15 +575,17 @@ function Set-DropboxGroupMemberAccess {
 	    $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
-                $Id = Get-DropboxGroupList -GroupName $GroupName
-            } else {
-                $Id = $GroupId
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
+                $Id = Get-DropboxGroupList -GroupName $GroupName -Token $Token
+                $Group=@{".tag"="group_id";group_id=$Id}
             }
-            $Group=@{".tag"="group_id";group_id=$Id}
-        } else {
-            $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            "GroupId" {
+                $Group=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
         }
 
         foreach ($Email in $MemberEmail) {
@@ -659,17 +663,17 @@ function Update-DropboxGroup {
 	    $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        
-        if ($GroupName -or $GroupId) {
-            if ($GroupName) {
-                $Id = Get-DropboxGroupList -GroupName $GroupName
-
-            } else {
-                $Id = $GroupId
+        switch ($PSCmdlet.ParameterSetName) {
+            "GroupName" {
+                $Id = Get-DropboxGroupList -GroupName $GroupName -Token $Token
+                $Group=@{".tag"="group_id";group_id=$Id}
             }
-            $Group=@{".tag"="group_id";group_id=$Id}
-        } else {
-            $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            "GroupId" {
+                $Group=@{".tag"="group_id";group_id=$GroupId}
+            }
+            "GroupExternalId" {
+                $Group=@{".tag"="group_external_id";group_external_id=$GroupExternalId}
+            }
         }
 
         $Body = @{

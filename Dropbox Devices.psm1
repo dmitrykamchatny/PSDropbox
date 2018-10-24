@@ -175,14 +175,16 @@ function Revoke-DropboxDevice {
         $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($WebSessionId) {
-            $Body=@{".tag"="web_session";session_id=$WebSessionId;team_member_id=$TeamMemberId}
-        }
-        if ($DesktopSessionId) {
-            $Body=@{".tag"="desktop_client";session_id=$DesktopSessionId;team_member_id=$TeamMemberId;delete_on_unlink=$DeleteOnUnlink.IsPresent}
-        }
-        if ($MobileSessionId) {
-            $Body=@{".tag"="mobile_client";session_id=$MobileSessionId;team_member_id=$TeamMemberId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "WebSession" {
+                $Body=@{".tag"="web_session";session_id=$WebSessionId;team_member_id=$TeamMemberId}
+            }
+            "DesktopClient" {
+                $Body=@{".tag"="desktop_client";session_id=$DesktopSessionId;team_member_id=$TeamMemberId;delete_on_unlink=$DeleteOnUnlink.IsPresent}
+            }
+            "MobileClient" {
+                $Body=@{".tag"="mobile_client";session_id=$MobileSessionId;team_member_id=$TeamMemberId}
+            }
         }
         
         try {
@@ -234,14 +236,16 @@ function Revoke-DropboxBatchDevice {
         $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($WebSessionId) {
-            $Body=@{".tag"="web_session";session_id=$WebSessionId;team_member_id=$TeamMemberId}
-        }
-        if ($DesktopSessionId) {
-            $Body=@{".tag"="desktop_client";session_id=$DesktopSessionId;team_member_id=$TeamMemberId;delete_on_unlink=$DeleteOnUnlink.IsPresent}
-        }
-        if ($MobileSessionId) {
-            $Body=@{".tag"="mobile_client";session_id=$MobileSessionId;team_member_id=$TeamMemberId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "WebSession"{
+                $Body=@{".tag"="web_session";session_id=$WebSessionId;team_member_id=$TeamMemberId}
+            }
+            "DesktopClient" {
+                $Body=@{".tag"="desktop_client";session_id=$DesktopSessionId;team_member_id=$TeamMemberId;delete_on_unlink=$DeleteOnUnlink.IsPresent}
+            }
+            "MobileClient" {
+                $Body=@{".tag"="mobile_client";session_id=$MobileSessionId;team_member_id=$TeamMemberId}
+            }
         }
         
         try {

@@ -71,19 +71,19 @@ function Add-DropboxMember {
         }
 
         if ($MemberGivenName) {
-            $Member.Add("member_given_name",$MemberGivenName)
+            $Member.Add("member_given_name",$MemberGivenName) | Out-Null
         }
         if ($MemberSurname) {
-            $Member.Add("member_surname",$MemberSurname)
+            $Member.Add("member_surname",$MemberSurname) | Out-Null
         }
         if ($MemberExternalId) {
-            $Member.Add("member_external_id",$MemberExternalId)
+            $Member.Add("member_external_id",$MemberExternalId) | Out-Null
         }
         if ($MemberPersistentId) {
-            $Member.Add("member_persistent_id",$MemberPersistentId)
+            $Member.Add("member_persistent_id",$MemberPersistentId) | Out-Null
         }
         if ($DirectoryRestricted.IsPresent -eq $true) {
-            $Member.Add("is_directory_restricted","true")
+            $Member.Add("is_directory_restricted","true") | Out-Null
         }
 
         $Body = @{
@@ -249,15 +249,16 @@ function Send-DropboxWelcomeEmail {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-
-        if ($MemberEmail) {
-            $Body = @{".tag"="email";email=$MemberEmail}
-        }
-        if ($TeamMemberId) {
-            $Body = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
-        }
-        if ($ExternalId) {
-            $Body = @{".tag"="external_id";external_id=$ExternalId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "Email" {
+                $Body = @{".tag"="email";email=$MemberEmail}
+            }
+            "MemberId" {
+                $Body = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
+            }
+            "ExternalId" {
+                $Body = @{".tag"="external_id";external_id=$ExternalId}
+            }
         }
         
         try {
@@ -314,15 +315,17 @@ function Set-DropboxMemberPermissions {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($MemberEmail) {
-            $User = @{".tag"="email";email=$MemberEmail}
-        }
-        if ($TeamMemberId) {
-            $User = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
-        }
-        if ($ExternalId) {
-            $User = @{".tag"="external_id";external_id=$ExternalId}
 
+        Switch ($PSCmdlet.ParameterSetName) {
+            "Email" {    
+                $User = @{".tag"="email";email=$MemberEmail}
+            }
+            "MemberId" {
+                $User = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
+            }
+            "ExternalId" {
+                $User = @{".tag"="external_id";external_id=$ExternalId}
+            }
         }
         $Body = @{
             user=$User
@@ -401,19 +404,19 @@ function Set-DropboxMemberProfile {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-
-        if ($MemberEmail) {
-            $Body=@{user=@{".tag"="email";email=$MemberEmail}}
-        }
-        if ($TeamMemberId) {
-            $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
-        }
-        if ($ExternalId) {
-            $Body=@{user=@{".tag"="external_id";external_id=$ExternalId}}
+        switch ($PSCmdlet.ParameterSetName) {
+            "Email" {
+                $Body=@{user=@{".tag"="email";email=$MemberEmail}}
+            }
+            "MemberId" {
+                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
+            }
+            "ExternalId" {
+                $Body=@{user=@{".tag"="external_id";external_id=$ExternalId}}
+            }
         }
 
         # Optional parameters
-
         if ($NewEmail) {
             $Body.Add("new_email",$NewEmail)
         }
@@ -484,14 +487,16 @@ function Suspend-DropboxMember {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($MemberEmail) {
-            $Body=@{user=@{".tag"="email";email=$MemberEmail};wipe_data=$WipeData.IsPresent}
-        }
-        if ($TeamMemberId) {
-            $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId};wipe_data=$WipeData.IsPresent}
-        }
-        if ($ExternalId) {
-            $Body= @{user=@{".tag"="external_id";external_id=$ExternalId};wipe_data=$WipeData.IsPresent}
+        switch ($PSCmdlet.ParameterSetName) {
+            "Email" {
+                $Body=@{user=@{".tag"="email";email=$MemberEmail};wipe_data=$WipeData.IsPresent}
+            }
+            "MemberId" {
+                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId};wipe_data=$WipeData.IsPresent}
+            }
+            "ExternalId" {
+                $Body= @{user=@{".tag"="external_id";external_id=$ExternalId};wipe_data=$WipeData.IsPresent}
+            }
         }
         
         try {
@@ -541,14 +546,16 @@ function Unsuspent-DropboxMember {
         $Header = @{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($MemberEmail) {
-            $Body=@{user=@{".tag"="email";email=$MemberEmail}}
-        }
-        if ($TeamMemberId) {
-            $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
-        }
-        if ($ExternalId) {
-            $Body= @{user=@{".tag"="external_id";external_id=$ExternalId}}
+        switch ($PSCmdlet.ParameterSetName) {
+            "Email" {
+                $Body=@{user=@{".tag"="email";email=$MemberEmail}}
+            }
+            "MemberId" {
+                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
+            }
+            "ExternalId" {
+                $Body= @{user=@{".tag"="external_id";external_id=$ExternalId}}
+            }
         }
         
         if ($PSCmdlet.ShouldProcess($Body,"Unsuspend member")) {
@@ -569,7 +576,7 @@ function Unsuspent-DropboxMember {
 .DESCRIPTION
    Move removed member's files to a different member.
 
-   The call requires an id for the user, destination user and administrator where email address, external_id or team_member_id can be specified. If an email and team_member_id is specified for a user, email address will take presidence.
+   The call requires an id for the user, destination user and administrator where email address, external_id or team_member_id can be specified, only one identification type can be specified.
 
    Refer to https://www.dropbox.com/developers/documentation/http/teams#team-members-move_former_member_files.
 .EXAMPLE
@@ -585,22 +592,31 @@ function Move-DropboxMemberFiles {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
     Param(
         # Member's team_member_id.
+        [parameter(Mandatory,ParameterSetName="MemberId")]
         [string]$TeamMemberId,
         # Member's external_id.
+        [parameter(Mandatory,ParameterSetName="ExternalId")]
         [string]$ExternalId,
         # Member's email address.
+        [parameter(Mandatory,ParameterSetName="Email")]
         [string]$MemberEmail,
         # Destination member's team_member_id.
+        [parameter(Mandatory,ParameterSetName="MemberId")]
         [string]$DestinationTeamMemberId,
         # Destination member's external_id.
+        [parameter(Mandatory,ParameterSetName="ExternalId")]
         [string]$DestinationExternalId,
         # Destination member's email address.
+        [parameter(Mandatory,ParameterSetName="Email")]
         [string]$DestinationEmail,
         # Administrator team_member_id.
+        [parameter(Mandatory,ParameterSetName="MemberId")]
         [string]$AdminTeamMemberId,
         # Administrator external_id.
+        [parameter(Mandatory,ParameterSetName="ExternalId")]
         [string]$AdminExternalId,
         # Administrator email address.
+        [parameter(Mandatory,ParameterSetName="Email")]
         [string]$AdminEmail,
         # Dropbox API access token.
         [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
@@ -613,29 +629,22 @@ function Move-DropboxMemberFiles {
     }
     Process{
 
-        # User
-        if ($MemberEmail) {
-            $User=@{".tag"="email";email=$MemberEmail}
-        } elseif ($ExternalId) {
-            $User=@{".tag"="external_id";external_id=$ExternalId}
-        } elseif ($TeamMemberId) {
-            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
-        }
-        # Destination member
-        if ($DestinationEmail) {
-            $Destination=@{".tag"="email";email=$DestinationEmail}
-        } elseif ($DestinationExternalId) {
-            $Destination=@{".tag"="external_id";external_id=$DestinationExternalId}
-        } elseif ($DestinationTeamMemberId) {
-            $Destination=@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId}
-        }
-        # Admin
-        if ($AdminEmail) {
-            $Admin=@{".tag"="email";email=$AdminEmail}
-        } elseif ($AdminExternalId) {
-            $Admin=@{".tag"="external_id";external_id=$AdminExternalId}
-        } elseif ($AdminTeamMemberId) {
-            $Admin=@{".tag"="team_member_id";team_member_id=$AdminTeamMemberId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "Email" {
+                $User=@{".tag"="email";email=$MemberEmail}
+                $Destination=@{".tag"="email";email=$DestinationEmail}
+                $Admin=@{".tag"="email";email=$AdminEmail}
+            }
+            "ExternalId" {
+                $User=@{".tag"="external_id";external_id=$ExternalId}
+                $Destination=@{".tag"="external_id";external_id=$DestinationExternalId}
+                $Admin=@{".tag"="external_id";external_id=$AdminExternalId}
+            }
+            "MemberId" {
+                $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+                $Destination=@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId}
+                $Admin=@{".tag"="team_member_id";team_member_id=$AdminTeamMemberId}
+            }
         }
 
         $Body = @{
@@ -690,12 +699,16 @@ function Restore-DropboxMember {
         $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        if ($MemberEmail) {
-            $User=@{".tag"="email";email=$MemberEmail}
-        } elseif ($ExternalId) {
-            $User=@{".tag"="external_id";external_id=$ExternalId}
-        } elseif ($TeamMemberId) {
-            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "TeamMemberId" {
+                $User=@{".tag"="email";email=$MemberEmail}
+            }
+            "ExternalId" {
+                $User=@{".tag"="external_id";external_id=$ExternalId}
+            }
+            "MemberEmail" {
+                $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+            }
         }
         
         $Body = @{
@@ -778,13 +791,16 @@ function Remove-DropboxMember {
         $Header=@{"Authorization"="Bearer $Token"}
     }
     Process{
-        
-        if ($MemberEmail) {
-            $User=@{".tag"="email";email=$MemberEmail}
-        } elseif ($ExternalId) {
-            $User=@{".tag"="external_id";external_id=$ExternalId}
-        } elseif ($TeamMemberId) {
-            $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+        switch ($PSCmdlet.ParameterSetName) {
+            "TeamMemberId" {
+                $User=@{".tag"="email";email=$MemberEmail}
+            }
+            "ExternalId" {
+                $User=@{".tag"="external_id";external_id=$ExternalId}
+            }
+            "MemberEmail" {
+                $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
+            }
         }
 
         $Body = @{
