@@ -530,7 +530,7 @@ function Suspend-DropboxMember {
 
    Unsuspend user powershell@example.com.
 #>
-function Unsuspent-DropboxMember {
+function Unsuspend-DropboxMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
     Param(
         # Dropbox team member's email address.
