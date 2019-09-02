@@ -19,19 +19,19 @@
 #>
 function Add-DropboxMember {
     [CmdletBinding()]
-    Param(
+    param (
         # New Dropbox member's email address.
         [parameter(Mandatory, ParameterSetName="SingleUser")]
         [ValidateLength(1,255)]
-        [string]$MemberEmail,
+        [string]$Email,
         # New Dropbox member's first name.
         [parameter(ParameterSetName="SingleUser")]
         [ValidateLength(1,100)]
-        [string]$MemberGivenName,
+        [string]$GivenName,
         # New Dropbox member's last name.
         [parameter(ParameterSetName="SingleUser")]
         [ValidateLength(1,100)]
-        [string]$MemberSurname,
+        [string]$Surname,
         # Team administrative tier.
         [parameter(ParameterSetName="SingleUser")]
         [validateset("member_only","support_admin","user_management_admin","team_admin")]
@@ -39,10 +39,10 @@ function Add-DropboxMember {
         # Ne Dropbox member's external_id.
         [parameter(ParameterSetName="SingleUser")]
         [ValidateLength(1,64)]
-        [string]$MemberExternalId,
+        [string]$ExternalId,
         # New Dropbox member's persistent_id. Only available for teams using persistent ID SAML configuration.
         [parameter(ParameterSetName="SingleUser")]
-        [string]$MemberPersistentId,
+        [string]$PersistentId,
         # Whether to send a welcome email to the member.
         [parameter(ParameterSetName="SingleUser")]
         [switch]$SendWelcomeEmail,
@@ -51,55 +51,45 @@ function Add-DropboxMember {
         [switch]$DirectoryRestricted,
         # Whether to force the add to happen asynchronously.
         [switch]$ForceAsync,
-        # Dropbox.Member.New object which must contain at least the email address. Maximum 20 entries per call.
-        [parameter(ParameterSetName="MultiUser")]
-        [PSTypeName("Dropbox.Member.New")]$InputObject,
         # Dropbox API access token.
         [parameter(Mandatory,HelpMessage="Enter TeamMemberManagement access token")]
         [string]$Token
 
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/add'
-        $Header = @{"Authorization"="Bearer $Token"}
-        $Member = New-Object -TypeName "System.Collections.Generic.Dictionary[[string],[string]]"
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = 'https://api.dropboxapi.com/2/team/members/add'
+            Header = @{Authorization = "Bearer $Token"}
+            ContentType = "application/json"
+        }
     }
-    Process{
-        
+    process {
         $Member = [ordered]@{
-                member_email=$MemberEmail
+                member_email=$Email
                 send_welcome_email=$SendWelcomeEmail.IsPresent
                 role=$Role
         }
-
-        if ($MemberGivenName) {
-            $Member.Add("member_given_name",$MemberGivenName) | Out-Null
-        }
-        if ($MemberSurname) {
-            $Member.Add("member_surname",$MemberSurname) | Out-Null
-        }
-        if ($MemberExternalId) {
-            $Member.Add("member_external_id",$MemberExternalId) | Out-Null
-        }
-        if ($MemberPersistentId) {
-            $Member.Add("member_persistent_id",$MemberPersistentId) | Out-Null
-        }
-        if ($DirectoryRestricted.IsPresent -eq $true) {
-            $Member.Add("is_directory_restricted","true") | Out-Null
+        switch ($PSBoundParameters.Keys) {
+            "GivenName" {$Member.Add("member_given_name", $GivenName)}
+            "Surname" {$Member.Add("member_surname", $MemberSurname)}
+            "ExternalId" {$Member.Add("member_external_id", $ExternalId)}
+            "PersistentId" {$Member.Add("member_persistent_id", $PersistentId)}
+            "DirectoryRestricted" {$Member.Add("is_directory_restricted", $DirectoryRestricted.IsPresent)}
         }
 
-        $Body = @{
+        $Parameters.Add("Body",(@{
             new_members=@($Member)
             force_async=$ForceAsync.IsPresent
-        }
+        } | ConvertTo-Json))
         
-        $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+        $Result = Invoke-RestMethod @Parameters
         Write-Output $Result.".tag"
         Write-Output $Result.complete.profile
 
     }
-    End{
+    end {
     }
 }
 
@@ -123,7 +113,7 @@ function Add-DropboxMember {
 #>
 function Get-DropboxMemberInfo {
     [CmdletBinding()]
-    Param(
+    param (
         # Dropbox team member's email address
         [parameter(Mandatory=$true,ParameterSetName="Email")]
         [ValidateLength(1,255)]
@@ -140,36 +130,32 @@ function Get-DropboxMemberInfo {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/get_info'
-        $Header = @{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri='https://api.dropboxapi.com/2/team/members/get_info'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+        }
         $Members = New-Object -TypeName System.Collections.ArrayList
     }
-    Process{
-
-        foreach ($Address in $MemberEmail) {
-            $Members.Add(@{".tag"="email";email=$Address}) | Out-Null
+    process {
+        switch ($PSBoundParameters.Keys) {
+            "MemberEmail" {$MemberEmail | ForEach-Object {$Members.Add(@{".tag" = "email"; email = $_ })} | Out-Null}
+            "TeamMemberId" {$TeamMemberId | ForEach-Object {$Members.Add(@{".tag" = "team_member_id"; team_member_id = $_})} | Out-Null}
+            "ExternalId" {$ExternalId | ForEach-Object {$Members.Add(@{".tag" = "external_id"; external_id = $_})} | Out-Null}
         }
-        foreach ($Id in $TeamMemberId) {
-            $Members.Add(@{".tag"="team_member_id";team_member_id=$Id}) | Out-Null
-        }
-        foreach ($Id in $ExternalId) {
-            $Members.Add(@{".tag"="external_id";external_id=$Id}) | Out-Null
-        }
-
-        $Body = @{
-            members=$Members
-        }
+        $Parameters.Add("Body",(@{members=$Members} | ConvertTo-Json))
         
         try {
-            $Response = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
-            Write-Output $Response.profile
+            $Result = Invoke-RestMethod @Parameters
+            Write-Output $Result.profile
         } catch {
             $ResultError = $_.Exception.Response.GetResponseStream()
             Get-DropboxError -Result $ResultError
         }
     }
-    End{
+    end {
     }
 }
 
@@ -193,7 +179,7 @@ function Get-DropboxMemberInfo {
 #>
 function Get-DropboxMemberList {
     [CmdletBinding()]
-    Param(
+    param (
         # Number of results to return per call.
         [ValidateRange(1,1000)]
         [int]$Limit=200,
@@ -204,21 +190,24 @@ function Get-DropboxMemberList {
         [string]$Token
     )
 
-    Begin{
-        $URI = "https://api.dropboxapi.com/2/team/members/list"
-        $Header = @{"Authorization"="Bearer $Token"}
-    }
-    Process{
-        
-        $Body = @{
-            limit=$Limit
-            include_removed=$IncludeRemoved.IsPresent
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = "https://api.dropboxapi.com/2/team/members/list"
+            Header = @{"Authorization" = "Bearer $Token"}
+            ContentType = "application/json"
+            Body = @{
+                limit = $Limit
+                include_removed = $IncludeRemoved.IsPresent
+            } | ConvertTo-Json
         }
-        
-        $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+
+    }
+    process {
+        $Result = Invoke-RestMethod @Parameters
         Write-Output $Result.members.profile | Sort-Object email
     }
-    End{}
+    end {}
 }
 
 <#
@@ -235,7 +224,7 @@ function Get-DropboxMemberList {
 #>
 function Send-DropboxWelcomeEmail {
     [CmdletBinding()]
-    Param(
+    param (
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
         [ValidateLength(1,255)]
@@ -252,33 +241,29 @@ function Send-DropboxWelcomeEmail {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/send_welcome_email'
-        $Header = @{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri='https://api.dropboxapi.com/2/team/members/send_welcome_email'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "applicaiton/json"
+        }
     }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "Email" {
-                $Body = @{".tag"="email";email=$MemberEmail}
-            }
-            "MemberId" {
-                $Body = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
-            }
-            "ExternalId" {
-                $Body = @{".tag"="external_id";external_id=$ExternalId}
-            }
+    process {
+        switch ($PSBoundParameters.Keys) {
+            "MemberEmail" {$Parameters.Add("Body",(@{".tag"="email";email=$MemberEmail} | ConvertTo-Json))}
+            "TeamMemberId" {$Parameters.Add("Body",(@{".tag"="team_member_id";team_member_id=$TeamMemberId} | ConvertTo-Json))}
+            "ExternalId" {$Parameters.Add("Body",(@{".tag"="external_id";external_id=$ExternalId} | ConvertTo-Json))}
         }
         
         try {
-            $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+            Invoke-RestMethod @Parameters
         } catch {
             $ResultError = $_.Exception.Response.GetResponseStream()
             Get-DropboxError -Result $ResultError
-
-
         }
     }
-    End{
+    end {
     }
 }
 
@@ -297,7 +282,7 @@ function Send-DropboxWelcomeEmail {
 #>
 function Set-DropboxMemberPermissions {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
-    Param(
+    param (
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
         [validatelength(1,255)]
@@ -318,31 +303,27 @@ function Set-DropboxMemberPermissions {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/set_admin_permissions'
-        $Header = @{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri='https://api.dropboxapi.com/2/team/members/set_admin_permissions'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+            Body = @{
+                new_role = $NewRole
+                user = switch ($PSBoundParameters.Keys) {
+                    "MemberEmail" {@{".tag"="email";email=$MemberEmail}}
+                    "TeamMemberId" {@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
+                    "ExternalId" {@{".tag"="external_id";external_id=$ExternalId}}
+                }
+            } | ConvertTo-Json
+        }
+        Write-Verbose $Parameters.Body
     }
-    Process{
-
-        Switch ($PSCmdlet.ParameterSetName) {
-            "Email" {    
-                $User = @{".tag"="email";email=$MemberEmail}
-            }
-            "MemberId" {
-                $User = @{".tag"="team_member_id";team_member_id=$TeamMemberId}
-            }
-            "ExternalId" {
-                $User = @{".tag"="external_id";external_id=$ExternalId}
-            }
-        }
-        $Body = @{
-            user=$User
-            new_role=$NewRole
-        }
-   
+    process {
         if ($PSCmdlet.ShouldProcess("Email: $MemberEmail, TeamMemberId: $TeamMemberId, ExternalId: $ExternalId","Update administrative permissions")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                $Result = Invoke-RestMethod @Parameters
                 Write-Output $Result
             } catch { 
                 $ResultError = $_.Exception.Response.GetResponseStream()
@@ -350,7 +331,7 @@ function Set-DropboxMemberPermissions {
             }
         }
     }
-    End{
+    end {
     }
 }
 
@@ -374,7 +355,7 @@ function Set-DropboxMemberPermissions {
 #>
 function Set-DropboxMemberProfile {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
-    Param(
+    param (
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
         [validatelength(1,255)]
@@ -407,46 +388,31 @@ function Set-DropboxMemberProfile {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/set_profile'
-        $Header = @{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri ='https://api.dropboxapi.com/2/team/members/set_profile'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+        }
     }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "Email" {
-                $Body=@{user=@{".tag"="email";email=$MemberEmail}}
-            }
-            "MemberId" {
-                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
-            }
-            "ExternalId" {
-                $Body=@{user=@{".tag"="external_id";external_id=$ExternalId}}
-            }
+    process {
+        switch ($PSBoundParameters.Keys) {
+            "MemberEmail" {$Body = @{user = @{".tag" = "email"; email = $MemberEmail}}}
+            "TeamMemberId" {$Body = @{user = @{".tag" = "team_member_id"; team_member_id = $TeamMemberId}}}
+            "ExternalId" {$Body = @{user = @{".tag" = "external_id"; external_id = $ExternalId}}}
+            "NewEmail" {$Body.Add("new_email", $NewEmail)}
+            "NewExternalId" {$Body.Add("new_external_id", $NewExternalId)}
+            "GivenName" {$Body.Add("new_given_name", $GivenName)}
+            "Surname" {$Body.Add("new_surname", $Surname)}
+            "PersistentId" {$Body.Add("new_persistent_id", $PersistentId)}
+            "NewIsDirectoryRestricted" {$Body.Add("new_is_directory_restricted", $NewIsDirectoryRestricted.IsPresent)}
         }
-
-        # Optional parameters
-        if ($NewEmail) {
-            $Body.Add("new_email",$NewEmail)
-        }
-        if ($NewExternalId) {
-            $Body.Add("new_external_id",$NewExternalId)
-        }
-        if ($GivenName) {
-            $Body.Add("new_given_name",$GivenName)
-        }
-        if ($Surname) {
-            $Body.Add("new_surname",$Surname)
-        }
-        if ($PersistentId) {
-            $Body.Add("new_persistent_id",$PersistentId)
-        }
-        if ($NewIsDirectoryRestricted) {
-            $Body.Add("new_is_directory_restricted",$NewIsDirectoryRestricted.IsPresent)
-        }
+        $Parameters.Add("Body",($Body | ConvertTo-Json))
 
         if ($PSCmdlet.ShouldProcess("Email: $Email, TeamMemberId: $TeamMemberId, ExternalId: $ExternalId","Update member profile")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                $Result = Invoke-RestMethod @Parameters
                 Write-Output $Result.profile
             } catch {
                 $ResultError = $_.Exception.Response.GetResponseStream()
@@ -454,7 +420,7 @@ function Set-DropboxMemberProfile {
             }
         }
     }
-    End{}
+    end {}
 }
 
 <#
@@ -471,7 +437,7 @@ function Set-DropboxMemberProfile {
 #>
 function Suspend-DropboxMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
-    Param(
+    param (
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
         [ValidateLength(1,255)]
@@ -490,33 +456,33 @@ function Suspend-DropboxMember {
         [switch]$WipeData
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/suspend'
-        $Header = @{"Authorization"="Bearer $Token"}
-    }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "Email" {
-                $Body=@{user=@{".tag"="email";email=$MemberEmail};wipe_data=$WipeData.IsPresent}
-            }
-            "MemberId" {
-                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId};wipe_data=$WipeData.IsPresent}
-            }
-            "ExternalId" {
-                $Body= @{user=@{".tag"="external_id";external_id=$ExternalId};wipe_data=$WipeData.IsPresent}
-            }
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri ='https://api.dropboxapi.com/2/team/members/suspend'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "applicaiton/json"
+            Body = @{
+                user = switch ($PSBoundParameters.Keys) {
+                    "MemberEmail" {@{".tag"="email";email=$MemberEmail}}
+                    "TeamMemberId" {@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
+                    "ExternalId" {@{".tag"="external_id";external_id=$ExternalId}}
+                }
+                wipe_data = $WipeData.IsPresent
+            } | ConvertTo-Json
         }
-        
+    }
+    process {
         try {
             if ($PSCmdlet.ShouldProcess("Suspend Dropbox Member $MemberEmail")) {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Invoke-RestMethod @Parameters
             }
         } catch {
             $ResultError = $_.Exception.Response.GetResponseStream()
             Get-DropboxError -Result $ResultError
         }
     }
-    End{
+    end {
     }
 }
 
@@ -526,13 +492,13 @@ function Suspend-DropboxMember {
 .DESCRIPTION
    Unsuspend a member from a team. Allows user to login to Dropbox again.
 .EXAMPLE
-   PS> Unsuspend-DropboxMember -MemberEmail powershell@example.com -Token <TeamMemberManagement>
+   PS> Restore-DropboxMember -MemberEmail powershell@example.com -Token <TeamMemberManagement>
 
    Unsuspend user powershell@example.com.
 #>
-function Unsuspend-DropboxMember {
+function Restore-DropboxSuspendedMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
-    Param(
+    param (
         # Dropbox team member's email address.
         [parameter(Mandatory,ParameterSetName="Email")]
         [ValidateLength(1,255)]
@@ -549,33 +515,32 @@ function Unsuspend-DropboxMember {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/unsuspend'
-        $Header = @{"Authorization"="Bearer $Token"}
-    }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "Email" {
-                $Body=@{user=@{".tag"="email";email=$MemberEmail}}
-            }
-            "MemberId" {
-                $Body=@{user=@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
-            }
-            "ExternalId" {
-                $Body= @{user=@{".tag"="external_id";external_id=$ExternalId}}
-            }
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = 'https://api.dropboxapi.com/2/team/members/unsuspend'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+            Body = @{
+                user = switch ($PSBoundParameters.Keys) {
+                    "MemberEmail" {@{".tag"="email";email=$MemberEmail}}
+                    "TeamMemberId" {@{".tag"="team_member_id";team_member_id=$TeamMemberId}}
+                    "ExternalId" {@{".tag"="external_id";external_id=$ExternalId}}
+                }
+            } | ConvertTo-Json
         }
-        
+    }
+    process {   
         if ($PSCmdlet.ShouldProcess($Body,"Unsuspend member")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                Invoke-RestMethod @Parameters
             } catch {
                 $ResultError = $_.Exception.Response.GetResponseStream()
                 Get-DropboxError -Result $ResultError
             }
         }
     }
-    End{}
+    end {}
 }
 
 <#
@@ -598,7 +563,7 @@ function Unsuspend-DropboxMember {
 #>
 function Move-DropboxMemberFiles {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Medium")]
-    Param(
+    param (
         # Member's team_member_id.
         [parameter(Mandatory,ParameterSetName="MemberId")]
         [string]$TeamMemberId,
@@ -631,12 +596,15 @@ function Move-DropboxMemberFiles {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/move_former_member_files'
-        $Header=@{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = 'https://api.dropboxapi.com/2/team/members/move_former_member_files'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+        }
     }
-    Process{
-
+    process {
         switch ($PSCmdlet.ParameterSetName) {
             "Email" {
                 $User=@{".tag"="email";email=$MemberEmail}
@@ -655,15 +623,15 @@ function Move-DropboxMemberFiles {
             }
         }
 
-        $Body = @{
+        $Parameters.Add("Body",(@{
             user=$User
             transfer_dest_id=$Destination
             transfer_admin_id=$Admin
-        }
+        } | ConvertTo-Json -Depth 3))
         
         if ($PSCmdlet.ShouldProcess($Destination,"Move $User files to")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body -Depth 3)
+                $Result = Invoke-RestMethod @Parameters
                 Write-Output $Result
             } catch {
                 $ResultError = $_.Exception.Response.GetResponseStream()
@@ -671,7 +639,7 @@ function Move-DropboxMemberFiles {
             }
         }
     }
-    End{
+    end {
     }
 }
 
@@ -687,7 +655,7 @@ function Move-DropboxMemberFiles {
 #>
 function Restore-DropboxMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="Low")]
-    Param(
+    param (
         # Dropbox member's team_member_id.
         [parameter(Mandatory,ParameterSetName="TeamMemberId")]
         [string]$TeamMemberId,
@@ -702,30 +670,25 @@ function Restore-DropboxMember {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/recover'
-        $Header=@{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = 'https://api.dropboxapi.com/2/team/members/recover'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+            Body = @{
+                user = switch ($PSBoundParameters.Keys) {
+                    "MemberEmail" {@{".tag" = "email"; email = $MemberEmail}}
+                    "TeamMemberId" {@{".tag" = "team_member_id"; team_member_id = $TeamMemberId}}
+                    "ExternalId" {@{".tag" = "external_id"; external_id = $ExternalId}}
+                }
+            } | ConvertTo-Json
+        }
     }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "TeamMemberId" {
-                $User=@{".tag"="email";email=$MemberEmail}
-            }
-            "ExternalId" {
-                $User=@{".tag"="external_id";external_id=$ExternalId}
-            }
-            "MemberEmail" {
-                $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
-            }
-        }
-        
-        $Body = @{
-            user=$User
-        }
-        
+    process {
         if ($PSCmdlet.ShouldProcess("$User","Restore Dropbox member")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                $Result = Invoke-RestMethod @Parameters
                 Write-Output $Result
             } catch {
                 $ResultError = $_.Exception.Response.GetResponseStream()
@@ -733,7 +696,7 @@ function Restore-DropboxMember {
             }
         }
     }
-    End{
+    end {
     }
 }
 
@@ -763,7 +726,7 @@ function Restore-DropboxMember {
 #>
 function Remove-DropboxMember {
     [CmdletBinding(SupportsShouldProcess,ConfirmImpact="High")]
-    Param(
+    param (
         # Dropbox member's team_member_id.
         [parameter(Mandatory,ParameterSetName="TeamMemberId")]
         [string]$TeamMemberId,
@@ -794,53 +757,40 @@ function Remove-DropboxMember {
         [string]$Token
     )
 
-    Begin{
-        $URI='https://api.dropboxapi.com/2/team/members/remove'
-        $Header=@{"Authorization"="Bearer $Token"}
+    begin {
+        $Parameters = @{
+            Method = "Post"
+            Uri = 'https://api.dropboxapi.com/2/team/members/remove'
+            Header = @{"Authorization"="Bearer $Token"}
+            ContentType = "application/json"
+        }
     }
-    Process{
-        switch ($PSCmdlet.ParameterSetName) {
-            "TeamMemberId" {
-                $User=@{".tag"="team_member_id";team_member_id=$TeamMemberId}
-            }
-            "ExternalId" {
-                $User=@{".tag"="external_id";external_id=$ExternalId}
-            }
-            "MemberEmail" {
-                $User=@{".tag"="email";email=$MemberEmail}
-            }
-        }
-
+    process {
         $Body = @{
-            user=$User
-            wipe_data=$WipeData.IsPresent
-            keep_account=$KeepAccount.IsPresent
+            user = switch ($PSBoundParameters.Keys) {
+                "MemberEmail" {@{".tag" = "email";email = $MemberEmail}}
+                "TeamMemberId" {@{".tag" = "team_member_id";team_member_id = $TeamMemberId}}
+                "ExternalId" {@{".tag" = "external_id";external_id = $ExternalId}}
+            }
+            wipe_date = $WipeData.IsPresent
+            keep_acount = $KeepAccount.IsPresent
+        }
+        switch ($PSBoundParameters.Keys) {
+            "DestinationEmail" {$Body.Add("transfer_dest_id",@{".tag"="email";email=$DestinationEmail})}
+            "DestinationTeamMemberId" { $Body.Add("transfer_dest_id", @{".tag" = "external_id"; external_id = $ExternalId})}
+            "DestinationExternalId" {$Body.Add("transfer_dest_id",@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId})}
         }
 
-        if ($DestinationEmail -or $DestinationExternalId -or $DestinationTeamMemberId) {
-            if ($DestinationEmail) {
-                $Body.Add("transfer_dest_id",@{".tag"="email";email=$DestinationEmail})
-            } elseif ($DestinationExternalId) {
-                $Body.Add("transfer_dest_id",@{".tag"="external_id";external_id=$ExternalId})               
-            } elseif ($DestinationTeamMemberId) {
-                $Body.Add("transfer_dest_id",@{".tag"="team_member_id";team_member_id=$DestinationTeamMemberId})
-            }
-            # Admin id required for transfer_dest_id.
-            if ($AdminEmail) {
-                $Body.Add("transfer_admin_id",@{".tag"="email";email=$AdminEmail})
-            } elseif ($AdminExternalId) {
-                 $Body.Add("transfer_admin_id",@{".tag"="external_id";external_id=$AdminExternalId})               
-            } elseif ($AdminTeamMemberId) {
-                $Body.Add("transfer_admin_id",@{".tag"="team_member_id";team_member_id=$AdminTeamMemberId})
-            } else {
-                Write-Warning "Specifying a destination account requires admin id to be specified."
-            }
-
+        switch ($PSBoundParameters.Keys) {
+            "AdminEmail" {$Body.Add("transfer_admin_id",@{".tag"="email";email=$AdminEmail})}
+            "AdminTeamMemberId" {$Body.Add("transfer_admin_id", @{".tag" = "external_id"; external_id = $AdminExternalId})}
+            "AdminExternalId" {$Body.Add("transfer_admin_id", @{".tag" = "team_member_id"; team_member_id = $AdminTeamMemberId})}
         }
-        Write-Verbose ($Body | ConvertTo-Json)
-        if ($PSCmdlet.ShouldProcess($User.Name,"Remove Dropbox team member")) {
+        $Parameters.Add("Body",($Body | ConvertTo-Json -Depth 3))
+
+        if ($PSCmdlet.ShouldProcess($Body.user,"Remove Dropbox team member")) {
             try {
-                $Result = Invoke-RestMethod -Uri $URI -Method Post -ContentType "application/json" -Headers $Header -Body (ConvertTo-Json -InputObject $Body)
+                $Result = Invoke-RestMethod @Parameters
                 Write-Output $Result
             } catch {
                 $ResultError = $_.Exception.Response.GetResponseStream()
@@ -848,5 +798,5 @@ function Remove-DropboxMember {
             }
         }
     }
-    End{}
+    end {}
 }
